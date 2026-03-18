@@ -63,9 +63,10 @@ const adminInviteBtn = document.getElementById('admin-invite-btn');
 const adminInviteStatus = document.getElementById('admin-invite-status');
 const burgerBtn = document.getElementById('burger-btn');
 const burgerMenu = document.getElementById('burger-menu');
-const burgerUserInfo = document.getElementById('burger-user-info');
-const burgerSessions = document.getElementById('burger-sessions');
-const burgerRefresh = document.getElementById('burger-refresh');
+const burgerUserEmail = document.getElementById('burger-user-email');
+const burgerUserRole = document.getElementById('burger-user-role');
+const burgerUsers = document.getElementById('burger-users');
+const burgerInvite = document.getElementById('burger-invite');
 const burgerLogout = document.getElementById('burger-logout');
 
 // Hidden metadata for the currently open feedback form
@@ -130,16 +131,15 @@ console.log('[app.js] Script loaded. Supabase available:', !!(window.supabase &&
     e.stopPropagation();
     burgerMenu.classList.toggle('open');
   });
-  burgerSessions.addEventListener('click', (e) => {
+  burgerUsers.addEventListener('click', (e) => {
     e.stopPropagation();
     burgerMenu.classList.remove('open');
-    const sidebar = document.getElementById('sidebar');
-    sidebar.classList.toggle('hidden');
+    openAdminModal();
   });
-  burgerRefresh.addEventListener('click', (e) => {
+  burgerInvite.addEventListener('click', (e) => {
     e.stopPropagation();
     burgerMenu.classList.remove('open');
-    handleRefresh();
+    openAdminModal();
   });
   burgerLogout.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -147,7 +147,7 @@ console.log('[app.js] Script loaded. Supabase available:', !!(window.supabase &&
     handleLogout();
   });
   document.addEventListener('click', (e) => {
-    if (!e.target.closest('#burger-btn')) burgerMenu.classList.remove('open');
+    if (!e.target.closest('.burger-wrap')) burgerMenu.classList.remove('open');
   });
 
   // ── Restore saved load period ──
@@ -283,7 +283,7 @@ async function afterAuthSuccess(user) {
   };
 
   if (userBadge) userBadge.textContent = currentUser.name;
-  if (burgerUserInfo) burgerUserInfo.textContent = currentUser.name;
+  if (burgerUserEmail) burgerUserEmail.textContent = currentUser.email;
 
   hideLoginError();
   clearStatusLog();
@@ -370,7 +370,9 @@ async function handleLogout() {
   currentSessionId = null;
   reviewedSessions = new Set();
   if (userBadge) userBadge.textContent = '';
-  if (burgerUserInfo) burgerUserInfo.textContent = '';
+  if (burgerUserEmail) burgerUserEmail.textContent = '';
+  if (burgerUserRole) { burgerUserRole.textContent = ''; burgerUserRole.className = 'burger-user-role'; }
+  if (burgerInvite) burgerInvite.style.display = 'none';
   if (adminSettingsBtn) adminSettingsBtn.style.display = 'none';
   closeAdminModal();
   const sc = document.getElementById('chat-session-controls');
@@ -866,11 +868,6 @@ function renderSessionList() {
 async function selectSession(sessionId) {
   currentSessionId = sessionId;
   renderSessionList(); // Update active highlight
-
-  // On mobile, hide sidebar when a session is selected
-  if (window.innerWidth <= 768) {
-    document.getElementById('sidebar').classList.add('hidden');
-  }
 
   // Show loading state
   chatMain.innerHTML = '<div class="loading-messages"><div class="spinner"></div> Loading messages...</div>';
@@ -1423,8 +1420,13 @@ async function fetchOrCreateUserRole() {
 }
 
 function updateAdminButton() {
-  if (!adminSettingsBtn) return;
-  adminSettingsBtn.style.display = currentUserRole === 'admin' ? '' : 'none';
+  if (adminSettingsBtn) adminSettingsBtn.style.display = currentUserRole === 'admin' ? '' : 'none';
+  // Update burger menu role badge and Invite visibility
+  if (burgerUserRole) {
+    burgerUserRole.textContent = currentUserRole || 'user';
+    burgerUserRole.className = 'burger-user-role' + (currentUserRole === 'admin' ? ' role-admin' : '');
+  }
+  if (burgerInvite) burgerInvite.style.display = currentUserRole === 'admin' ? '' : 'none';
 }
 
 function openAdminModal() {
