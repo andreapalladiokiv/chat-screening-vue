@@ -223,11 +223,13 @@ The Edge Function:
 
 - Two top-level panels: `#login-panel` (flex, visible by default) and `#chat-panel` (hidden until connected, shown via `.active` class)
 - Inside `#chat-panel`:
-  - `#sidebar` — session list, search, filters; sidebar header contains the **Sessions** title, a pulsing `• Live` badge, and an **Invite** button (`#admin-settings-btn`, hidden for non-admins, shown only for `admin` role users)
+  - `#sidebar` — session list, search, filters; sidebar header contains a **burger menu** (☰) button and a pulsing `• Live` badge
+    - The burger menu dropdown shows: signed-in user email + role badge, **Users** and **Invite** items (Invite visible to admins only), and **Logout**
+    - Users / Invite open the admin settings modal; Logout signs out and returns to the login screen
   - `.chat-area` — wraps the header bar and `#chat-main`:
-    - `#chat-header-bar` — permanent header with `#chat-session-controls` (left, session-specific) and `.chat-header-right` (right: Refresh, user name, Logout)
+    - `#chat-header-bar` — permanent header with `#chat-session-controls` (left, session-specific) and `.chat-header-right` (right: Refresh button)
     - `#chat-main` — scrollable message area; wiped and repopulated on session switch
-- `app.js` is loaded with a cache-busting query param (`?v=19`) — increment this when deploying changes
+- `app.js` is loaded with a cache-busting query param (`?v=35`) — increment this when deploying changes
 - Login panel contains only the "Sign in with Google" button and `#login-error`; no credential input fields, no status log
 
 ## Filtering Logic
@@ -254,7 +256,7 @@ Reviewed state is managed client-side (no database writes):
 
 1. **Edge function slug**: The file is `supabase/functions/chat-feedback/` and the frontend calls `db.functions.invoke('chat-feedback', ...)`. The deployed Supabase slug must match — if you redeploy under a different name, update the `invoke` call in `submitFeedback()` (`app.js`) accordingly.
 
-2. **Cache-busting**: `app.js` is loaded as `app.js?v=19`. Increment the version number when deploying updated `app.js` to avoid browsers serving stale cached versions. Forgetting this has caused runtime errors when HTML and JS are out of sync (e.g. removing a DOM element that old JS still references).
+2. **Cache-busting**: `app.js` is loaded as `app.js?v=35`. Increment the version number when deploying updated `app.js` to avoid browsers serving stale cached versions. Forgetting this has caused runtime errors when HTML and JS are out of sync (e.g. removing a DOM element that old JS still references).
 
 3. **config.js is required**: The login UI has no manual credential input fields. If `config.js` is absent and no credentials are saved in `localStorage`, the Google sign-in button will display an error. Always deploy `config.js` alongside `index.html`. Use the multi-env `environments` array format to expose a named dropdown for multiple Supabase projects.
 
