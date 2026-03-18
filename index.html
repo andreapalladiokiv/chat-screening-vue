@@ -964,27 +964,27 @@
     }
 
     /* Burger Menu */
+    .burger-wrap {
+      position: relative;
+    }
     .burger-btn {
       display: block;
       background: none;
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 5px 8px;
+      border: none;
       cursor: pointer;
-      color: var(--text-secondary);
-      font-size: 18px;
+      color: var(--text-primary);
+      font-size: 22px;
       line-height: 1;
-      position: relative;
+      padding: 4px 6px;
     }
     .burger-btn:hover {
-      border-color: var(--accent);
       color: var(--accent);
     }
     .burger-menu {
       display: none;
       position: absolute;
-      top: calc(100% + 6px);
-      right: 0;
+      top: calc(100% + 8px);
+      left: 0;
       background: #fff;
       border: 1px solid var(--border);
       border-radius: var(--radius);
@@ -994,6 +994,34 @@
       overflow: hidden;
     }
     .burger-menu.open { display: block; }
+    .burger-user-info {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .burger-user-email {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      margin-bottom: 4px;
+    }
+    .burger-user-role {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: capitalize;
+      background: var(--badge-bg);
+      color: var(--badge-text);
+    }
+    .burger-user-role.role-admin {
+      background: #fef3c7;
+      color: #92400e;
+    }
     .burger-menu-item {
       display: flex;
       align-items: center;
@@ -1015,15 +1043,6 @@
       height: 1px;
       background: var(--border);
       margin: 0;
-    }
-    .burger-user-info {
-      padding: 10px 16px;
-      font-size: 13px;
-      color: var(--text-secondary);
-      border-bottom: 1px solid var(--border);
-      font-weight: 600;
-      overflow: hidden;
-      text-overflow: ellipsis;
     }
 
     /* Responsive */
@@ -1175,11 +1194,22 @@
     <!-- Sidebar -->
     <div class="sidebar" id="sidebar">
       <div class="sidebar-header">
-        <h2>Sessions</h2>
-        <div class="sidebar-header-right">
-          <button id="admin-settings-btn" class="disconnect-btn" style="display:none">Invite</button>
-          <span class="live-badge" id="live-badge"><span class="live-dot"></span>Live</span>
+        <div class="burger-wrap">
+          <button class="burger-btn" id="burger-btn" title="Menu">&#9776;</button>
+          <div class="burger-menu" id="burger-menu">
+            <div class="burger-user-info">
+              <span class="burger-user-email" id="burger-user-email"></span>
+              <span class="burger-user-role" id="burger-user-role"></span>
+            </div>
+            <button class="burger-menu-item" id="burger-users">&#128100; Users</button>
+            <button class="burger-menu-item" id="burger-invite" style="display:none">&#9993; Invite</button>
+            <div class="burger-menu-divider"></div>
+            <button class="burger-menu-item danger" id="burger-logout">&#8592; Logout</button>
+          </div>
         </div>
+        <span class="live-badge" id="live-badge"><span class="live-dot"></span>Live</span>
+        <!-- Hidden, kept for JS compatibility -->
+        <button id="admin-settings-btn" style="display:none">Invite</button>
       </div>
       <div class="search-box">
         <input type="text" id="session-search" placeholder="Search sessions...">
@@ -1254,18 +1284,9 @@
       <div class="chat-header" id="chat-header-bar">
         <div class="chat-session-controls" id="chat-session-controls"></div>
         <div class="chat-header-right">
-          <button class="disconnect-btn" id="refresh-btn" style="display:none">Refresh</button>
+          <button class="disconnect-btn" id="refresh-btn">Refresh</button>
           <span class="user-name" id="user-badge" title="" style="display:none"></span>
           <button class="disconnect-btn" id="logout-btn" style="display:none">Logout</button>
-          <button class="burger-btn" id="burger-btn" title="Menu">&#9776;
-            <div class="burger-menu" id="burger-menu">
-              <div class="burger-user-info" id="burger-user-info"></div>
-              <button class="burger-menu-item" id="burger-sessions">&#9776; Sessions</button>
-              <button class="burger-menu-item" id="burger-refresh">&#8635; Refresh</button>
-              <div class="burger-menu-divider"></div>
-              <button class="burger-menu-item danger" id="burger-logout">&#x2192; Logout</button>
-            </div>
-          </button>
         </div>
       </div>
       <div class="chat-main" id="chat-main">
@@ -1347,7 +1368,7 @@
   </script>
   <!-- config.js is gitignored; its absence is fine — the app falls back to manual entry -->
   <script src="config.js" onerror="console.info('config.js not found — using manual credential entry.');"></script>
-  <script src="app.js?v=34"
+  <script src="app.js?v=35"
           onerror="document.getElementById('login-error').style.display='block'; document.getElementById('login-error').textContent='Failed to load app.js.';">
   </script>
 </body>
