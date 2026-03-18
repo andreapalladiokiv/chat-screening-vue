@@ -965,7 +965,7 @@
 
     /* Burger Menu */
     .burger-btn {
-      display: none;
+      display: block;
       background: none;
       border: 1px solid var(--border);
       border-radius: var(--radius);
@@ -989,7 +989,7 @@
       border: 1px solid var(--border);
       border-radius: var(--radius);
       box-shadow: 0 4px 16px rgba(0,0,0,0.12);
-      min-width: 180px;
+      min-width: 200px;
       z-index: 300;
       overflow: hidden;
     }
@@ -997,7 +997,7 @@
     .burger-menu-item {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 10px;
       width: 100%;
       padding: 10px 16px;
       background: none;
@@ -1022,6 +1022,8 @@
       color: var(--text-secondary);
       border-bottom: 1px solid var(--border);
       font-weight: 600;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     /* Responsive */
@@ -1029,9 +1031,6 @@
       .sidebar { width: 100%; position: absolute; z-index: 10; }
       .sidebar.hidden { display: none; }
       .message { max-width: 85%; }
-      .chat-header-right .disconnect-btn,
-      .chat-header-right .user-name { display: none; }
-      .burger-btn { display: block; }
     }
     .google-btn {
       display: flex;
@@ -1255,16 +1254,16 @@
       <div class="chat-header" id="chat-header-bar">
         <div class="chat-session-controls" id="chat-session-controls"></div>
         <div class="chat-header-right">
-          <button class="disconnect-btn" id="refresh-btn">Refresh</button>
-          <span class="user-name" id="user-badge" title=""></span>
-          <button class="disconnect-btn" id="logout-btn">Logout</button>
+          <button class="disconnect-btn" id="refresh-btn" style="display:none">Refresh</button>
+          <span class="user-name" id="user-badge" title="" style="display:none"></span>
+          <button class="disconnect-btn" id="logout-btn" style="display:none">Logout</button>
           <button class="burger-btn" id="burger-btn" title="Menu">&#9776;
             <div class="burger-menu" id="burger-menu">
               <div class="burger-user-info" id="burger-user-info"></div>
               <button class="burger-menu-item" id="burger-sessions">&#9776; Sessions</button>
               <button class="burger-menu-item" id="burger-refresh">&#8635; Refresh</button>
               <div class="burger-menu-divider"></div>
-              <button class="burger-menu-item danger" id="burger-logout">Logout</button>
+              <button class="burger-menu-item danger" id="burger-logout">&#x2192; Logout</button>
             </div>
           </button>
         </div>
@@ -1348,7 +1347,7 @@
   </script>
   <!-- config.js is gitignored; its absence is fine — the app falls back to manual entry -->
   <script src="config.js" onerror="console.info('config.js not found — using manual credential entry.');"></script>
-  <script src="app.js?v=33"
+  <script src="app.js?v=34"
           onerror="document.getElementById('login-error').style.display='block'; document.getElementById('login-error').textContent='Failed to load app.js.';">
   </script>
 </body>
