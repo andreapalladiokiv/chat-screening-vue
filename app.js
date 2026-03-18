@@ -61,6 +61,12 @@ const adminInviteEmail = document.getElementById('admin-invite-email');
 const adminInviteRole = document.getElementById('admin-invite-role');
 const adminInviteBtn = document.getElementById('admin-invite-btn');
 const adminInviteStatus = document.getElementById('admin-invite-status');
+const burgerBtn = document.getElementById('burger-btn');
+const burgerMenu = document.getElementById('burger-menu');
+const burgerUserInfo = document.getElementById('burger-user-info');
+const burgerSessions = document.getElementById('burger-sessions');
+const burgerRefresh = document.getElementById('burger-refresh');
+const burgerLogout = document.getElementById('burger-logout');
 
 // Hidden metadata for the currently open feedback form
 let feedbackMeta = {};
@@ -118,6 +124,31 @@ console.log('[app.js] Script loaded. Supabase available:', !!(window.supabase &&
     if (e.target === adminModalOverlay) closeAdminModal();
   });
   adminInviteBtn.addEventListener('click', () => inviteUser(adminInviteEmail.value.trim(), adminInviteRole.value));
+
+  // Burger menu
+  burgerBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    burgerMenu.classList.toggle('open');
+  });
+  burgerSessions.addEventListener('click', (e) => {
+    e.stopPropagation();
+    burgerMenu.classList.remove('open');
+    const sidebar = document.getElementById('sidebar');
+    sidebar.classList.toggle('hidden');
+  });
+  burgerRefresh.addEventListener('click', (e) => {
+    e.stopPropagation();
+    burgerMenu.classList.remove('open');
+    handleRefresh();
+  });
+  burgerLogout.addEventListener('click', (e) => {
+    e.stopPropagation();
+    burgerMenu.classList.remove('open');
+    handleLogout();
+  });
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#burger-btn')) burgerMenu.classList.remove('open');
+  });
 
   // ── Restore saved load period ──
   const savedPeriod = localStorage.getItem('sb_load_period');
@@ -252,6 +283,7 @@ async function afterAuthSuccess(user) {
   };
 
   if (userBadge) userBadge.textContent = currentUser.name;
+  if (burgerUserInfo) burgerUserInfo.textContent = currentUser.name;
 
   hideLoginError();
   clearStatusLog();
@@ -338,6 +370,7 @@ async function handleLogout() {
   currentSessionId = null;
   reviewedSessions = new Set();
   if (userBadge) userBadge.textContent = '';
+  if (burgerUserInfo) burgerUserInfo.textContent = '';
   if (adminSettingsBtn) adminSettingsBtn.style.display = 'none';
   closeAdminModal();
   const sc = document.getElementById('chat-session-controls');
@@ -833,6 +866,11 @@ function renderSessionList() {
 async function selectSession(sessionId) {
   currentSessionId = sessionId;
   renderSessionList(); // Update active highlight
+
+  // On mobile, hide sidebar when a session is selected
+  if (window.innerWidth <= 768) {
+    document.getElementById('sidebar').classList.add('hidden');
+  }
 
   // Show loading state
   chatMain.innerHTML = '<div class="loading-messages"><div class="spinner"></div> Loading messages...</div>';
