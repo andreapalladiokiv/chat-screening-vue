@@ -13,8 +13,9 @@ const loginPanel = document.getElementById('login-panel');
 const chatPanel = document.getElementById('chat-panel');
 const connectBtn = document.getElementById('connect-btn');
 const loginError = document.getElementById('login-error');
-const logoutBtn = document.getElementById('logout-btn');
-const userBadge = document.getElementById('user-badge');
+const usersModalOverlay = document.getElementById('users-modal-overlay');
+const usersModalBody = document.getElementById('users-modal-body');
+const usersModalClose = document.getElementById('users-modal-close');
 const refreshBtn = document.getElementById('refresh-btn');
 const sessionSearch = document.getElementById('session-search');
 const sessionCount = document.getElementById('session-count');
@@ -52,7 +53,6 @@ const loadPeriodWarning = document.getElementById('load-period-warning');
 const loadingOverlay = document.getElementById('loading-overlay');
 const loadProgressBar = document.getElementById('load-progress-bar');
 const loadProgressText = document.getElementById('load-progress-text');
-const adminSettingsBtn = document.getElementById('admin-settings-btn');
 const adminModalOverlay = document.getElementById('admin-modal-overlay');
 const adminModalClose = document.getElementById('admin-modal-close');
 const adminInfoName = document.getElementById('admin-info-name');
@@ -62,12 +62,12 @@ const adminInviteRole = document.getElementById('admin-invite-role');
 const adminInviteBtn = document.getElementById('admin-invite-btn');
 const adminInviteStatus = document.getElementById('admin-invite-status');
 const burgerBtn = document.getElementById('burger-btn');
-const burgerMenu = document.getElementById('burger-menu');
+const burgerDropdown = document.getElementById('burger-dropdown');
 const burgerUserEmail = document.getElementById('burger-user-email');
 const burgerUserRole = document.getElementById('burger-user-role');
-const burgerUsers = document.getElementById('burger-users');
-const burgerInvite = document.getElementById('burger-invite');
-const burgerLogout = document.getElementById('burger-logout');
+const burgerUsersBtn = document.getElementById('burger-users-btn');
+const burgerInviteBtn = document.getElementById('burger-invite-btn');
+const burgerLogoutBtn = document.getElementById('burger-logout-btn');
 
 // Hidden metadata for the currently open feedback form
 let feedbackMeta = {};
@@ -81,7 +81,6 @@ console.log('[app.js] Script loaded. Supabase available:', !!(window.supabase &&
 // ── Init ──
 (async function init() {
   connectBtn.addEventListener('click', handleGoogleSignIn);
-  logoutBtn.addEventListener('click', handleLogout);
   refreshBtn.addEventListener('click', handleRefresh);
   sessionSearch.addEventListener('input', renderSessionList);
 
@@ -119,7 +118,6 @@ console.log('[app.js] Script loaded. Supabase available:', !!(window.supabase &&
   });
 
   // Admin settings modal
-  adminSettingsBtn.addEventListener('click', openAdminModal);
   adminModalClose.addEventListener('click', closeAdminModal);
   adminModalOverlay.addEventListener('click', (e) => {
     if (e.target === adminModalOverlay) closeAdminModal();
@@ -129,25 +127,30 @@ console.log('[app.js] Script loaded. Supabase available:', !!(window.supabase &&
   // Burger menu
   burgerBtn.addEventListener('click', (e) => {
     e.stopPropagation();
-    burgerMenu.classList.toggle('open');
-  });
-  burgerUsers.addEventListener('click', (e) => {
-    e.stopPropagation();
-    burgerMenu.classList.remove('open');
-    openAdminModal();
-  });
-  burgerInvite.addEventListener('click', (e) => {
-    e.stopPropagation();
-    burgerMenu.classList.remove('open');
-    openAdminModal();
-  });
-  burgerLogout.addEventListener('click', (e) => {
-    e.stopPropagation();
-    burgerMenu.classList.remove('open');
-    handleLogout();
+    burgerDropdown.classList.toggle('open');
   });
   document.addEventListener('click', (e) => {
-    if (!e.target.closest('.burger-wrap')) burgerMenu.classList.remove('open');
+    if (burgerDropdown.classList.contains('open') &&
+        !burgerDropdown.contains(e.target) && e.target !== burgerBtn) {
+      burgerDropdown.classList.remove('open');
+    }
+  });
+  burgerUsersBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    burgerDropdown.classList.remove('open');
+    openUsersModal();
+  });
+  usersModalClose.addEventListener('click', closeUsersModal);
+  usersModalOverlay.addEventListener('click', (e) => {
+    if (e.target === usersModalOverlay) closeUsersModal();
+  });
+  burgerInviteBtn.addEventListener('click', () => {
+    burgerDropdown.classList.remove('open');
+    openAdminModal();
+  });
+  burgerLogoutBtn.addEventListener('click', () => {
+    burgerDropdown.classList.remove('open');
+    handleLogout();
   });
 
   // ── Restore saved load period ──
@@ -282,8 +285,7 @@ async function afterAuthSuccess(user) {
     name: user.user_metadata?.full_name || user.user_metadata?.name || user.email || '',
   };
 
-  if (userBadge) userBadge.textContent = currentUser.name;
-  if (burgerUserEmail) burgerUserEmail.textContent = currentUser.email;
+  burgerUserEmail.textContent = currentUser.email;
 
   hideLoginError();
   clearStatusLog();
@@ -369,11 +371,12 @@ async function handleLogout() {
   allSessions = [];
   currentSessionId = null;
   reviewedSessions = new Set();
-  if (userBadge) userBadge.textContent = '';
-  if (burgerUserEmail) burgerUserEmail.textContent = '';
-  if (burgerUserRole) { burgerUserRole.textContent = ''; burgerUserRole.className = 'burger-user-role'; }
-  if (burgerInvite) burgerInvite.style.display = 'none';
-  if (adminSettingsBtn) adminSettingsBtn.style.display = 'none';
+  burgerUserEmail.textContent = '';
+  burgerUserRole.textContent = '';
+  burgerUsersBtn.style.display = 'none';
+  burgerInviteBtn.style.display = 'none';
+  burgerDropdown.classList.remove('open');
+  closeUsersModal();
   closeAdminModal();
   const sc = document.getElementById('chat-session-controls');
   if (sc) sc.innerHTML = '';
@@ -1420,13 +1423,11 @@ async function fetchOrCreateUserRole() {
 }
 
 function updateAdminButton() {
-  if (adminSettingsBtn) adminSettingsBtn.style.display = currentUserRole === 'admin' ? '' : 'none';
-  // Update burger menu role badge and Invite visibility
-  if (burgerUserRole) {
-    burgerUserRole.textContent = currentUserRole || 'user';
-    burgerUserRole.className = 'burger-user-role' + (currentUserRole === 'admin' ? ' role-admin' : '');
-  }
-  if (burgerInvite) burgerInvite.style.display = currentUserRole === 'admin' ? '' : 'none';
+  const isAdmin = currentUserRole === 'admin';
+  burgerUsersBtn.style.display = isAdmin ? '' : 'none';
+  burgerInviteBtn.style.display = isAdmin ? '' : 'none';
+  burgerUserRole.textContent = currentUserRole || 'user';
+  burgerUserRole.className = 'burger-user-role' + (isAdmin ? ' role-admin' : '');
 }
 
 function openAdminModal() {
@@ -1473,5 +1474,42 @@ async function inviteUser(email, role) {
     adminInviteStatus.className = 'admin-invite-status error';
   } finally {
     adminInviteBtn.disabled = false;
+  }
+}
+
+// ── Users Modal ──
+
+function closeUsersModal() {
+  if (usersModalOverlay) usersModalOverlay.classList.remove('open');
+}
+
+async function openUsersModal() {
+  if (!usersModalOverlay || !usersModalBody) return;
+  usersModalBody.innerHTML = '<div class="users-dropdown-loading">Loading…</div>';
+  usersModalOverlay.classList.add('open');
+  try {
+    const { data, error } = await db
+      .from('chat_view_user_roles')
+      .select('email, role')
+      .order('email', { ascending: true });
+    if (error) throw error;
+    if (!data || data.length === 0) {
+      usersModalBody.innerHTML = '<div class="users-dropdown-empty">No users found.</div>';
+      return;
+    }
+    usersModalBody.innerHTML = data.map(u => {
+      const email = u.email || '';
+      const name = email.includes('@') ? email.split('@')[0] : email;
+      return `<div class="users-dropdown-item">
+        <div class="users-dropdown-info">
+          <span class="users-dropdown-username">${escapeHtml(name)}</span>
+          <span class="users-dropdown-email">${escapeHtml(email)}</span>
+        </div>
+        <span class="users-dropdown-role${u.role === 'admin' ? ' role-admin' : ''}">${escapeHtml(u.role || 'user')}</span>
+      </div>`;
+    }).join('');
+  } catch (err) {
+    console.error('[users] fetch error:', err);
+    usersModalBody.innerHTML = '<div class="users-dropdown-empty">Failed to load users.</div>';
   }
 }

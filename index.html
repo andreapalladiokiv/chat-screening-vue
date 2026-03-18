@@ -602,16 +602,6 @@
       margin-left: auto;
     }
 
-    .chat-header-right .user-name {
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--text-primary);
-      max-width: 140px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
     .chat-header h3 {
       font-size: 15px;
       overflow: hidden;
@@ -963,86 +953,198 @@
       color: var(--text-secondary);
     }
 
-    /* Burger Menu */
-    .burger-wrap {
-      position: relative;
-    }
+    /* Burger menu */
     .burger-btn {
-      display: block;
       background: none;
       border: none;
       cursor: pointer;
-      color: var(--text-primary);
+      padding: 4px 6px;
       font-size: 22px;
       line-height: 1;
-      padding: 4px 6px;
+      color: var(--text-primary);
+      border-radius: 4px;
     }
-    .burger-btn:hover {
-      color: var(--accent);
-    }
-    .burger-menu {
+    .burger-btn:hover { background: var(--bg); }
+
+    .burger-dropdown {
       display: none;
       position: absolute;
-      top: calc(100% + 8px);
-      left: 0;
-      background: #fff;
+      top: calc(100% + 4px);
+      left: 12px;
+      min-width: 220px;
+      background: rgba(255, 255, 255, 0.96);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      box-shadow: 0 4px 16px rgba(0,0,0,0.12);
-      min-width: 200px;
-      z-index: 300;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+      z-index: 350;
       overflow: hidden;
     }
-    .burger-menu.open { display: block; }
+    .burger-dropdown.open { display: block; }
+
     .burger-user-info {
-      padding: 12px 16px;
+      padding: 12px 14px;
       border-bottom: 1px solid var(--border);
     }
     .burger-user-email {
-      display: block;
       font-size: 13px;
       font-weight: 600;
       color: var(--text-primary);
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      margin-bottom: 4px;
     }
     .burger-user-role {
       display: inline-block;
-      padding: 2px 10px;
-      border-radius: 12px;
+      margin-top: 4px;
       font-size: 11px;
       font-weight: 600;
-      text-transform: capitalize;
+      padding: 2px 8px;
+      border-radius: 10px;
       background: var(--badge-bg);
       color: var(--badge-text);
+      text-transform: capitalize;
     }
     .burger-user-role.role-admin {
       background: #fef3c7;
       color: #92400e;
     }
+
     .burger-menu-item {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 8px;
       width: 100%;
-      padding: 10px 16px;
+      padding: 10px 14px;
       background: none;
       border: none;
-      font-size: 14px;
-      color: var(--text-primary);
       cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-primary);
       text-align: left;
-      white-space: nowrap;
+    }
+    .burger-menu-item > span {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 20px;
+      flex-shrink: 0;
+      font-size: 15px;
     }
     .burger-menu-item:hover { background: var(--bg); }
     .burger-menu-item.danger { color: var(--danger); }
-    .burger-menu-item.danger:hover { background: #fef2f2; }
-    .burger-menu-divider {
+    .burger-menu-item.danger:hover { background: #fde8e8; }
+    .burger-divider {
       height: 1px;
       background: var(--border);
+    }
+
+    /* Users Modal */
+    .users-modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.35);
+      z-index: 500;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+    .users-modal-overlay.open { display: flex; }
+    .users-modal {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+      width: 380px;
+      max-width: 92vw;
+      max-height: 80vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .users-modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .users-modal-header h3 {
+      font-size: 16px;
+      font-weight: 700;
       margin: 0;
+    }
+    .users-modal-close {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 18px;
+      color: var(--text-secondary);
+      padding: 4px 8px;
+      border-radius: 4px;
+      line-height: 1;
+    }
+    .users-modal-close:hover { color: var(--text-primary); background: var(--bg); }
+    .users-modal-body {
+      overflow-y: auto;
+      flex: 1;
+    }
+    .users-dropdown-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 20px;
+      border-bottom: 1px solid var(--border);
+      gap: 8px;
+    }
+    .users-dropdown-item:last-child { border-bottom: none; }
+    .users-dropdown-info {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      gap: 1px;
+    }
+    .users-dropdown-username {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .users-dropdown-email {
+      font-size: 11px;
+      color: var(--text-secondary);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .users-dropdown-role {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 10px;
+      background: var(--badge-bg);
+      color: var(--badge-text);
+      flex-shrink: 0;
+      text-transform: capitalize;
+    }
+    .users-dropdown-role.role-admin {
+      background: #fef3c7;
+      color: #92400e;
+    }
+    .users-dropdown-empty {
+      padding: 16px 14px;
+      font-size: 13px;
+      color: var(--text-secondary);
+      text-align: center;
+    }
+    .users-dropdown-loading {
+      padding: 16px 14px;
+      font-size: 13px;
+      color: var(--text-secondary);
+      text-align: center;
     }
 
     /* Responsive */
@@ -1194,22 +1296,28 @@
     <!-- Sidebar -->
     <div class="sidebar" id="sidebar">
       <div class="sidebar-header">
-        <div class="burger-wrap">
+        <div style="display:flex;align-items:center;gap:8px;position:relative;">
           <button class="burger-btn" id="burger-btn" title="Menu">&#9776;</button>
-          <div class="burger-menu" id="burger-menu">
+          <div class="burger-dropdown" id="burger-dropdown">
             <div class="burger-user-info">
-              <span class="burger-user-email" id="burger-user-email"></span>
+              <div class="burger-user-email" id="burger-user-email"></div>
               <span class="burger-user-role" id="burger-user-role"></span>
             </div>
-            <button class="burger-menu-item" id="burger-users">&#128100; Users</button>
-            <button class="burger-menu-item" id="burger-invite" style="display:none">&#9993; Invite</button>
-            <div class="burger-menu-divider"></div>
-            <button class="burger-menu-item danger" id="burger-logout">&#8592; Logout</button>
+            <button class="burger-menu-item" id="burger-users-btn" style="display:none">
+              <span>&#128101;</span> Users
+            </button>
+            <button class="burger-menu-item" id="burger-invite-btn" style="display:none">
+              <span>&#9993;</span> Invite
+            </button>
+            <div class="burger-divider"></div>
+            <button class="burger-menu-item danger" id="burger-logout-btn">
+              <span>&#8618;</span> Logout
+            </button>
           </div>
         </div>
-        <span class="live-badge" id="live-badge"><span class="live-dot"></span>Live</span>
-        <!-- Hidden, kept for JS compatibility -->
-        <button id="admin-settings-btn" style="display:none">Invite</button>
+        <div class="sidebar-header-right">
+          <span class="live-badge" id="live-badge"><span class="live-dot"></span>Live</span>
+        </div>
       </div>
       <div class="search-box">
         <input type="text" id="session-search" placeholder="Search sessions...">
@@ -1285,8 +1393,6 @@
         <div class="chat-session-controls" id="chat-session-controls"></div>
         <div class="chat-header-right">
           <button class="disconnect-btn" id="refresh-btn">Refresh</button>
-          <span class="user-name" id="user-badge" title="" style="display:none"></span>
-          <button class="disconnect-btn" id="logout-btn" style="display:none">Logout</button>
         </div>
       </div>
       <div class="chat-main" id="chat-main">
@@ -1318,6 +1424,17 @@
         <button class="fb-submit-btn" id="fb-submit">Submit</button>
       </div>
       <div class="fb-status" id="fb-status"></div>
+    </div>
+  </div>
+
+  <!-- Users Modal -->
+  <div id="users-modal-overlay" class="users-modal-overlay">
+    <div class="users-modal">
+      <div class="users-modal-header">
+        <h3>Platform Users</h3>
+        <button id="users-modal-close" class="users-modal-close" title="Close">&#10005;</button>
+      </div>
+      <div class="users-modal-body" id="users-modal-body"></div>
     </div>
   </div>
 
