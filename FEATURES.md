@@ -25,14 +25,19 @@ Update this file whenever a feature is added, changed, or completed.
 
 ### Navigation & Header
 - [x] Permanent chat header bar (`#chat-header-bar`) outside `#chat-main`, always visible after login
-- [x] Right side of chat header: Refresh button, signed-in user name, Logout button — always present
+- [x] Right side of chat header: Refresh button — always present
 - [x] Left side of chat header (`#chat-session-controls`): session-specific controls populated when a session is selected:
   - Mark Reviewed / Reviewed ✓ toggle button
   - Feedback button
   - Session ID
   - Total message count
   - Type-count pills (human / ai / tool / system)
-- [x] Sidebar header shows only the `Sessions` title and pulsing `• Live` badge
+- [x] **Burger menu** (☰) in sidebar header with dropdown containing:
+  - Signed-in user email and role badge (Admin / User)
+  - Users item — opens admin settings modal
+  - Invite item (visible to admins only) — opens admin settings modal
+  - Logout — signs out and returns to login screen
+- [x] Pulsing `• Live` badge shown next to burger menu in sidebar header
 
 ### Session List
 - [x] All sessions loaded via paginated fetching (1000 rows/page) to handle large tables
@@ -52,8 +57,8 @@ Update this file whenever a feature is added, changed, or completed.
 - [x] Reviewed state loaded on init and on every refresh
 
 ### User Management (Admin)
-- [x] Admin users see an **Invite** button in the sidebar header (hidden for non-admins)
-- [x] Invite button opens an admin settings modal showing the signed-in user's name and role
+- [x] Admin users see an **Invite** item in the burger menu dropdown (hidden for non-admins)
+- [x] Users / Invite items open an admin settings modal showing the signed-in user's name and role
 - [x] Admin can invite a new user by email and assign them a `user` or `admin` role
 - [x] If the email already has a Supabase Auth account, only the role is updated (no duplicate invite sent)
 - [x] Invite logic handled by `invite-user` Edge Function (admin-only, requires valid JWT + admin role check)
@@ -103,7 +108,7 @@ Update this file whenever a feature is added, changed, or completed.
 - [x] WhatsApp-inspired design with CSS custom properties for theming
 - [x] Responsive layout: sidebar overlays at ≤768px
 - [x] Collapsible tool call / tool result details (`<details>` element)
-- [x] Cache-busting query param on `app.js` (`?v=19`) — increment when deploying
+- [x] Cache-busting query param on `app.js` (`?v=35`) — increment when deploying
 - [x] Global JS error handler shows errors in the browser console
 - [x] CDN load error handler for Supabase library (error shown in `#login-error`)
 
