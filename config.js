@@ -17,6 +17,12 @@ window.CHAT_VIEW_CONFIG = {
       allowedDomains: [],
     },
     {
+      name: 'Stage',
+      projectId: 'mompzsurvrgdjanubshq',
+      anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1vbXB6c3VydnJnZGphbnVic2hxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzc3MTY5NDAsImV4cCI6MjA1MzI5Mjk0MH0.2cLbaHHd1ru6FRoHKxCa_LSWASECRfiVHP3mAls8nbc',
+      allowedDomains: [],
+    },
+    {
       name: 'Production',
       // Replace with your dev Supabase project subdomain
       projectId: 'lyelqfxmfooczmyopfic',
