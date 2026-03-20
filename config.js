@@ -3,6 +3,7 @@
 //
 // Multi-environment format: define an "environments" array to enable the
 // environment selector dropdown on the login screen.
+//superb
 window.CHAT_VIEW_CONFIG = {
   environments: [
     {
