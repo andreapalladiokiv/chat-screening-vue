@@ -163,7 +163,7 @@ BEGIN
   )
 
   -- 8. Apply post-aggregation filters, sort, limit
-  SELECT jsonb_agg(row_to_jsonb(c))
+  SELECT jsonb_agg(to_jsonb(c))
   INTO   result
   FROM (
     SELECT *
