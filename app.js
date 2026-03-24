@@ -329,6 +329,7 @@ async function afterAuthSuccess(user) {
 
     if (!sessionsOk) {
       logStatus('Failed to load sessions. Staying on login screen.');
+      showLoginError('Failed to load sessions. The get_session_list RPC may be missing or inaccessible. Check the Supabase SQL Editor.');
       db = null;
       currentUser = null;
       return;
