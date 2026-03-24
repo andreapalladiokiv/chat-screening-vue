@@ -47,7 +47,7 @@ const filterClear = document.getElementById('filter-clear');
 const filterApply = document.getElementById('filter-apply');
 const filterDateWarning = document.getElementById('filter-date-warning');
 const timeGateEl = document.getElementById('time-gate');
-const envBadge = document.getElementById('env-badge');
+const envSwitcher = document.getElementById('env-switcher');
 const feedbackOverlay = document.getElementById('feedback-overlay');
 const fbSubtitle = document.getElementById('fb-subtitle');
 const fbCategory = document.getElementById('fb-category');
@@ -346,7 +346,7 @@ async function afterAuthSuccess(user) {
     logStatus('Loaded ' + allSessions.length + ' sessions. Switching to chat view...');
     loginPanel.style.display = 'none';
     chatPanel.classList.add('active');
-    showEnvBadge();
+    setupEnvSwitcher();
     populateFilters();
     renderSessionList();
     updateTimeGate();
@@ -382,7 +382,7 @@ async function handleLogout() {
   noMoreSessions = false;
   filtersApplied = false;
   currentFilterParams = null;
-  if (envBadge) envBadge.classList.remove('active');
+  if (envSwitcher) { envSwitcher.classList.remove('active'); envSwitcher.innerHTML = ''; }
   if (timeGateEl) timeGateEl.textContent = '';
   burgerUserEmail.textContent = '';
   burgerUserRole.textContent = '';
@@ -754,7 +754,7 @@ async function applyFilters() {
     }
     if (allSessions.length < 50) noMoreSessions = true;
 
-    populateFilters();
+    repopulateFiltersPreservingSelection();
     renderSessionList();
     updateTimeGate();
   } catch (err) {
@@ -1409,16 +1409,68 @@ function escapeHtml(str) {
 
 const TIME_ZONE = 'Europe/Chisinau';
 
-// Show the current environment name near the Live badge
-function showEnvBadge() {
-  if (!envBadge) return;
+// Populate and show the environment switcher in the sidebar header
+function setupEnvSwitcher() {
+  if (!envSwitcher || environments.length === 0) return;
   const savedEnvIdx = parseInt(localStorage.getItem('sb_selected_env') || '0', 10);
-  const env = environments[savedEnvIdx] || environments[0];
-  if (env && env.name) {
-    envBadge.textContent = env.name;
-    envBadge.classList.add('active');
+
+  envSwitcher.innerHTML = '';
+  environments.forEach((env, i) => {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = env.name || ('Env ' + (i + 1));
+    envSwitcher.appendChild(opt);
+  });
+  envSwitcher.value = savedEnvIdx;
+  envSwitcher.classList.add('active');
+
+  // If only one environment, show as a static label (no dropdown arrow)
+  if (environments.length <= 1) {
+    envSwitcher.classList.add('single');
   } else {
-    envBadge.classList.remove('active');
+    envSwitcher.classList.remove('single');
+  }
+
+  // Switch environment on change
+  envSwitcher.addEventListener('change', handleEnvSwitch);
+}
+
+async function handleEnvSwitch() {
+  const newIdx = parseInt(envSwitcher.value, 10);
+  const newEnv = environments[newIdx];
+  if (!newEnv) return;
+
+  // Save new environment selection
+  localStorage.setItem('sb_selected_env', newIdx);
+  localStorage.setItem('sb_project_id', newEnv.projectId);
+  localStorage.setItem('sb_key', newEnv.anonKey);
+
+  // Sign out of current environment
+  if (db) await db.auth.signOut().catch(() => {});
+  unsubscribeRealtime();
+  db = null;
+  currentUser = null;
+  currentUserRole = null;
+  allSessions = [];
+  currentSessionId = null;
+  sessionCursor = null;
+  filtersApplied = false;
+  currentFilterParams = null;
+  noMoreSessions = false;
+
+  // Initialize new client and trigger OAuth
+  initSupabaseClient(newEnv.projectId, newEnv.anonKey);
+
+  const { error } = await db.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo: window.location.origin + window.location.pathname },
+  });
+
+  if (error) {
+    // Revert to previous env on failure
+    chatPanel.classList.remove('active');
+    loginPanel.style.display = 'flex';
+    showLoginError('Failed to switch environment: ' + error.message);
   }
 }
 
