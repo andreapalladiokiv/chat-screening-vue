@@ -404,23 +404,22 @@ async function handleRefresh() {
   refreshBtn.disabled = true;
   refreshBtn.textContent = 'Refreshing...';
   sessionCount.textContent = 'Refreshing sessions...';
-  loadingOverlay.style.display = 'flex';
 
   // Refresh filter options and re-run current view (default or filtered)
   await loadFilterOptions();
   if (filtersApplied && currentFilterParams) {
     await applyFilters();
   } else {
+    loadingOverlay.style.display = 'flex';
     await loadDefaultSessions();
-  }
-
-  loadingOverlay.style.display = 'none';
-  if (allSessions.length > 0) {
-    populateFilters();
-    renderSessionList();
-    updateTimeGate();
-  } else {
-    sessionCount.textContent = 'No sessions found.';
+    loadingOverlay.style.display = 'none';
+    if (allSessions.length > 0) {
+      populateFilters();
+      renderSessionList();
+      updateTimeGate();
+    } else {
+      sessionCount.textContent = 'No sessions found.';
+    }
   }
   refreshBtn.disabled = false;
   refreshBtn.textContent = 'Refresh';
@@ -701,13 +700,8 @@ async function applyFilters() {
     || selectedTools.length > 0 || selectedCategories.length > 0 || selectedReqTypes.length > 0;
 
   if (!hasServerFilters) {
-    // No server filters — just re-render with client-side sort/reviewed/search
-    loadingOverlay.style.display = 'flex';
-    await loadDefaultSessions();
-    loadingOverlay.style.display = 'none';
-    populateFilters();
-    renderSessionList();
-    updateTimeGate();
+    // No server filters — reload default sessions
+    await clearFilters();
     return;
   }
 
@@ -750,7 +744,7 @@ async function applyFilters() {
     const { data, error } = await db.rpc('get_session_list', params);
     if (error) {
       console.error('applyFilters error:', error);
-      showLoginError('Filter query failed: ' + (error.message || 'Unknown error'));
+      sessionCount.textContent = 'Filter query failed.';
       return;
     }
     allSessions = parseSessionResults(data);
@@ -759,6 +753,7 @@ async function applyFilters() {
     }
     if (allSessions.length < 50) noMoreSessions = true;
 
+    populateFilters();
     renderSessionList();
     updateTimeGate();
   } catch (err) {
