@@ -13,7 +13,7 @@ The application is a zero-build-step frontend: open `index.html` in a browser an
 ```
 chat-view/
 ├── index.html                              # Single-page app (HTML + all CSS)
-├── app.js                                  # All application logic (~1330 lines)
+├── app.js                                  # All application logic
 ├── config.js                               # Gitignored — Supabase credentials, multi-env config + optional domain restriction
 ├── favicon.svg                             # Eyes emoji favicon
 ├── FEATURES.md                             # Feature list and todo tracker
@@ -26,7 +26,8 @@ chat-view/
     │       └── index.ts                    # Deno Edge Function: admin invite + role upsert
     └── migrations/
         ├── create_chat_feedback.sql        # DB schema for feedback table
-        └── create_user_roles.sql           # DB schema + RLS + trigger for user roles
+        ├── create_user_roles.sql           # DB schema + RLS + trigger for user roles
+        └── create_session_rpc.sql          # RPCs: get_session_list, get_filter_options + indexes
 ```
 
 ## Technology Stack
@@ -53,7 +54,7 @@ python3 -m http.server
 # Or just open index.html in a browser
 ```
 
-**Login screen** shows only a "Sign in with Google" button. No credential fields are displayed.
+**Login screen** shows an optional environment dropdown (when multiple environments configured) and a "Sign in with Google" button. No credential fields are displayed.
 
 **Credentials must be provided via `config.js`** (gitignored) — the login button will show an error if neither `config.js` nor saved `localStorage` values are present.
 
@@ -205,12 +206,14 @@ The Edge Function:
 
 - **No framework** — plain DOM manipulation with `document.createElement`, `innerHTML`, `addEventListener`
 - **Module pattern** — IIFE `init()` runs on load; no ES modules
-- **Global state** — `db`, `allSessions`, `allToolNames`, `allCategories`, `allRequestTypes`, `currentSessionId`, `feedbackMeta`, `reviewedSessions`, `environments`, `currentUserRole` (`'user' | 'admin' | null`) are top-level variables
+- **Global state** — `db`, `allSessions`, `allToolNames`, `allCategories`, `allRequestTypes`, `currentSessionId`, `feedbackMeta`, `reviewedSessions`, `environments`, `currentUserRole`, `sessionCursor`, `isLoadingMore`, `noMoreSessions`, `filtersApplied`, `currentFilterParams` are top-level variables
 - **XSS prevention** — all user-supplied or database-sourced text is passed through `escapeHtml()` before setting `innerHTML`. Never set `innerHTML` with raw data.
-- **Pagination** — `loadSessions()` fetches `chat_messages` in pages of 1000 rows using `.range(from, from + pageSize - 1)`
+- **Lazy loading** — Session list uses RPC `get_session_list` for paginated, server-side-filtered session summaries. Default load: 50 most recent sessions. Infinite scroll loads 10 more per batch. Filters are applied server-side with a max 3-day date range. Filter options (tools, categories, request types) are fetched once at login via `get_filter_options` RPC
 - **Timezone** — All dates displayed in `'Europe/Chisinau'` timezone (hardcoded constant `TIME_ZONE` near the bottom of `app.js`)
 - **Error handling** — connection errors shown in `#login-error`; message errors logged to console
 - **Status log** — `logStatus()` is a no-op that writes to `console.log` only; the visible status log was removed from the login UI
+- **Environment badge** — shows the current environment name near the Live badge in the sidebar header
+- **Time gate** — shows the time range of currently loaded sessions in the session info bar
 
 ### CSS (index.html)
 
@@ -230,18 +233,24 @@ The Edge Function:
     - `#chat-header-bar` — permanent header with `#chat-session-controls` (left, session-specific) and `.chat-header-right` (right: Refresh button)
     - `#chat-main` — scrollable message area; wiped and repopulated on session switch
 - `app.js` is loaded with a cache-busting query param (`?v=35`) — increment this when deploying changes
-- Login panel contains only the "Sign in with Google" button and `#login-error`; no credential input fields, no status log
+- Login panel contains only the environment selector (if multi-env), "Sign in with Google" button, and `#login-error`; no credential input fields, no status log
+- Sidebar header shows env badge and Live badge; session info bar below filters shows session count + time gate
 
 ## Filtering Logic
 
-Session filtering in `renderSessionList()`:
-- **Text search** — substring match on `session_id`
-- **Date range** — session is included if it overlaps the selected range (uses `earliest` and `latest` timestamps)
-- **Message count** — inclusive min/max filter on `session.count`
+Filtering is split between server-side (RPC) and client-side:
+
+**Server-side (via `get_session_list` RPC, triggered by "Apply Filters" button):**
+- **Date range** — max 3-day gap enforced by the UI; auto-fills last 3 days if not specified
+- **Message count** — inclusive min/max
 - **Tools** — session must contain **all** selected tools (AND logic)
 - **Categories** — session must match **at least one** selected category (OR logic)
 - **Request types** — session must match **at least one** selected request type (OR logic)
-- **Reviewed** — `all` (no filter) / `reviewed` (only sessions in `reviewedSessions`) / `unreviewed` (only sessions not in the set)
+
+**Client-side (instant, in `renderSessionList()`):**
+- **Text search** — substring match on `session_id`
+- **Sort** — newest / oldest / most messages / fewest messages (sorts loaded sessions only)
+- **Reviewed** — `all` / `reviewed` / `unreviewed`
 
 ## Mark as Reviewed
 
@@ -256,7 +265,7 @@ Reviewed state is managed client-side (no database writes):
 
 1. **Edge function slug**: The file is `supabase/functions/chat-feedback/` and the frontend calls `db.functions.invoke('chat-feedback', ...)`. The deployed Supabase slug must match — if you redeploy under a different name, update the `invoke` call in `submitFeedback()` (`app.js`) accordingly.
 
-2. **Cache-busting**: `app.js` is loaded as `app.js?v=35`. Increment the version number when deploying updated `app.js` to avoid browsers serving stale cached versions. Forgetting this has caused runtime errors when HTML and JS are out of sync (e.g. removing a DOM element that old JS still references).
+2. **Cache-busting**: `app.js` is loaded as `app.js?v=36`. Increment the version number when deploying updated `app.js` to avoid browsers serving stale cached versions. Forgetting this has caused runtime errors when HTML and JS are out of sync (e.g. removing a DOM element that old JS still references).
 
 3. **config.js is required**: The login UI has no manual credential input fields. If `config.js` is absent and no credentials are saved in `localStorage`, the Google sign-in button will display an error. Always deploy `config.js` alongside `index.html`. Use the multi-env `environments` array format to expose a named dropdown for multiple Supabase projects.
 

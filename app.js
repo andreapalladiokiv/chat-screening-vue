@@ -8,6 +8,13 @@ let currentSessionId = null;
 let realtimeChannel = null;
 let environments = []; // parsed from window.CHAT_VIEW_CONFIG
 
+// Lazy-loading state
+let sessionCursor = null;    // ISO timestamp of oldest loaded session (for pagination)
+let isLoadingMore = false;   // guard against concurrent scroll-loads
+let noMoreSessions = false;  // true when server returned fewer than requested
+let filtersApplied = false;  // true when server-side filters are active
+let currentFilterParams = null; // stored RPC params when filters are applied (for loadMore)
+
 // ── DOM Elements ──
 const loginPanel = document.getElementById('login-panel');
 const chatPanel = document.getElementById('chat-panel');
@@ -37,6 +44,10 @@ const filterRequestTypeTrigger = document.getElementById('filter-request-type-tr
 const filterRequestTypePanel = document.getElementById('filter-request-type-panel');
 const filterReviewed = document.getElementById('filter-reviewed');
 const filterClear = document.getElementById('filter-clear');
+const filterApply = document.getElementById('filter-apply');
+const filterDateWarning = document.getElementById('filter-date-warning');
+const timeGateEl = document.getElementById('time-gate');
+const envBadge = document.getElementById('env-badge');
 const feedbackOverlay = document.getElementById('feedback-overlay');
 const fbSubtitle = document.getElementById('fb-subtitle');
 const fbCategory = document.getElementById('fb-category');
@@ -48,8 +59,6 @@ const fbUserName = document.getElementById('fb-user-name');
 const liveBadge = document.getElementById('live-badge');
 const envSelect = document.getElementById('env-select');
 const envSelectorWrap = document.getElementById('env-selector-wrap');
-const loadPeriodSelect = document.getElementById('load-period-select');
-const loadPeriodWarning = document.getElementById('load-period-warning');
 const loadingOverlay = document.getElementById('loading-overlay');
 const loadProgressBar = document.getElementById('load-progress-bar');
 const loadProgressText = document.getElementById('load-progress-text');
@@ -74,7 +83,6 @@ let feedbackMeta = {};
 let reviewedSessions = new Set();
 let currentUser = null; // { id, email, name } — set after Google sign-in
 let currentUserRole = null; // 'user' | 'admin' | null
-let loadedFromDate = null; // earliest created_at sent to server in last loadSessions() call
 
 console.log('[app.js] Script loaded. Supabase available:', !!(window.supabase && window.supabase.createClient));
 
@@ -89,12 +97,14 @@ console.log('[app.js] Script loaded. Supabase available:', !!(window.supabase &&
     filterToggle.classList.toggle('open');
     filterPanel.classList.toggle('open');
   });
-  filterDateFrom.addEventListener('change', handleDateFromChange);
-  filterDateTo.addEventListener('change', renderSessionList);
-  filterMsgMin.addEventListener('input', renderSessionList);
-  filterMsgMax.addEventListener('input', renderSessionList);
+  // Date inputs validate the 3-day gap on change (for warning display)
+  filterDateFrom.addEventListener('change', validateDateRange);
+  filterDateTo.addEventListener('change', validateDateRange);
+  // Sort and reviewed are client-side only — instant re-render
   filterSort.addEventListener('change', renderSessionList);
   filterReviewed.addEventListener('change', renderSessionList);
+  // Apply / Clear buttons
+  filterApply.addEventListener('click', applyFilters);
 
   // Dropdown checklist toggle + click-outside
   document.addEventListener('click', (e) => {
@@ -153,14 +163,8 @@ console.log('[app.js] Script loaded. Supabase available:', !!(window.supabase &&
     handleLogout();
   });
 
-  // ── Restore saved load period ──
-  const savedPeriod = localStorage.getItem('sb_load_period');
-  if (savedPeriod !== null) loadPeriodSelect.value = savedPeriod;
-  handlePeriodWarning();
-  loadPeriodSelect.addEventListener('change', () => {
-    localStorage.setItem('sb_load_period', loadPeriodSelect.value);
-    handlePeriodWarning();
-  });
+  // Infinite scroll on session list
+  sessionList.addEventListener('scroll', handleSessionListScroll);
 
   // ── Build environments list from config ──
   const cfg = window.CHAT_VIEW_CONFIG || {};
@@ -315,16 +319,15 @@ async function afterAuthSuccess(user) {
     loadReviewed();
 
     logStatus('Loading sessions...');
-    const periodDays = parseInt(loadPeriodSelect.value, 10);
-    const fromDateStr = periodDays === 0 ? null : (() => {
-      const d = new Date();
-      d.setDate(d.getDate() - periodDays);
-      return d.toISOString().slice(0, 10);
-    })();
     loadingOverlay.style.display = 'flex';
-    const sessions = await loadSessions(fromDateStr);
 
-    if (sessions === false) {
+    // Fetch filter options (tools, categories, request types) in parallel with default sessions
+    const [filterOpts, sessionsOk] = await Promise.all([
+      loadFilterOptions(),
+      loadDefaultSessions(),
+    ]);
+
+    if (!sessionsOk) {
       logStatus('Failed to load sessions. Staying on login screen.');
       db = null;
       currentUser = null;
@@ -342,8 +345,10 @@ async function afterAuthSuccess(user) {
     logStatus('Loaded ' + allSessions.length + ' sessions. Switching to chat view...');
     loginPanel.style.display = 'none';
     chatPanel.classList.add('active');
+    showEnvBadge();
     populateFilters();
     renderSessionList();
+    updateTimeGate();
     subscribeRealtime();
   } catch (err) {
     logStatus('FAILED: ' + (err.message || String(err)));
@@ -371,6 +376,13 @@ async function handleLogout() {
   allSessions = [];
   currentSessionId = null;
   reviewedSessions = new Set();
+  sessionCursor = null;
+  isLoadingMore = false;
+  noMoreSessions = false;
+  filtersApplied = false;
+  currentFilterParams = null;
+  if (envBadge) envBadge.classList.remove('active');
+  if (timeGateEl) timeGateEl.textContent = '';
   burgerUserEmail.textContent = '';
   burgerUserRole.textContent = '';
   burgerUsersBtn.style.display = 'none';
@@ -392,14 +404,21 @@ async function handleRefresh() {
   refreshBtn.disabled = true;
   refreshBtn.textContent = 'Refreshing...';
   sessionCount.textContent = 'Refreshing sessions...';
-  const refreshPeriodDays = parseInt(loadPeriodSelect.value, 10);
-  const refreshDefaultFrom = refreshPeriodDays === 0 ? null : defaultFromDate();
   loadingOverlay.style.display = 'flex';
-  await loadSessions(filterDateFrom.value || refreshDefaultFrom);
+
+  // Refresh filter options and re-run current view (default or filtered)
+  await loadFilterOptions();
+  if (filtersApplied && currentFilterParams) {
+    await applyFilters();
+  } else {
+    await loadDefaultSessions();
+  }
+
   loadingOverlay.style.display = 'none';
   if (allSessions.length > 0) {
     populateFilters();
     renderSessionList();
+    updateTimeGate();
   } else {
     sessionCount.textContent = 'No sessions found.';
   }
@@ -534,139 +553,219 @@ function clearStatusLog() {
   // no-op: status log removed from UI
 }
 
-// ── Sessions ──
-async function loadSessions(fromDateStr = defaultFromDate()) {
-  // Fetch rows in pages of 1000, filtered to fromDateStr onwards
-  loadedFromDate = fromDateStr;
-  const sessionMap = {};
-  let from = 0;
-  const pageSize = 1000;
-  let rowsLoaded = 0;
-  const globalToolSet = new Set();
-  const globalCategorySet = new Set();
-  const globalRequestTypeSet = new Set();
+// ── Sessions (RPC-based lazy loading) ──
 
-  // Count total rows first so we can show accurate progress
-  let totalCount = 0;
-  {
-    let countQuery = db.from('chat_messages').select('*', { count: 'exact', head: true });
-    if (fromDateStr) countQuery = countQuery.gte('created_at', fromDateStr);
-    const { count } = await countQuery;
-    totalCount = count ?? 0;
+// Fetch all distinct filter options from the DB (called once at login / refresh)
+async function loadFilterOptions() {
+  try {
+    const { data, error } = await db.rpc('get_filter_options');
+    if (error) { console.warn('[filters] get_filter_options error:', error); return; }
+    if (data) {
+      allToolNames = (data.tools || []).sort();
+      allCategories = (data.categories || []).sort();
+      allRequestTypes = (data.request_types || []).sort();
+    }
+  } catch (err) {
+    console.warn('[filters] loadFilterOptions failed:', err);
   }
-  updateLoadProgress(0, totalCount);
+}
 
-  while (true) {
-    logStatus('Fetching rows ' + from + '–' + (from + pageSize - 1) + '...');
+// Parse the RPC result into the allSessions format used by the rest of the app
+function parseSessionResults(rows) {
+  return (rows || []).map(row => ({
+    id: row.session_id,
+    count: Number(row.msg_count),
+    latest: row.latest,
+    earliest: row.earliest,
+    tools: row.tools || [],
+    typeCounts: row.type_counts || { human: 0, ai: 0, tool: 0, system: 0 },
+    categories: row.categories || [],
+    requestTypes: row.request_types || [],
+    hasVerified: row.has_verified || false,
+    hasEndConversation: row.has_end_conversation || false,
+  }));
+}
 
-    let pageQuery = db
-      .from('chat_messages')
-      .select('session_id, created_at, message');
-    if (fromDateStr) pageQuery = pageQuery.gte('created_at', fromDateStr);
-    const { data, error } = await pageQuery.range(from, from + pageSize - 1);
+// Default load: most recent 50 sessions, no filters
+async function loadDefaultSessions() {
+  filtersApplied = false;
+  currentFilterParams = null;
+  sessionCursor = null;
+  noMoreSessions = false;
 
+  try {
+    const { data, error } = await db.rpc('get_session_list', { p_limit: 50 });
     if (error) {
       logStatus('Session fetch ERROR: ' + (error.message || JSON.stringify(error)));
       console.error('Failed to load sessions:', error);
       return false;
     }
 
-    logStatus('Got ' + data.length + ' rows in this page.');
-    rowsLoaded += data.length;
-    updateLoadProgress(rowsLoaded, totalCount);
+    allSessions = parseSessionResults(data);
+    if (allSessions.length > 0) {
+      sessionCursor = allSessions[allSessions.length - 1].latest;
+    }
+    if (allSessions.length < 50) noMoreSessions = true;
 
-    for (const row of data) {
-      if (!sessionMap[row.session_id]) {
-        sessionMap[row.session_id] = {
-          count: 0, latest: row.created_at, earliest: row.created_at,
-          tools: new Set(),
-          typeCounts: { human: 0, ai: 0, tool: 0, system: 0 },
-          categories: new Set(),
-          requestTypes: new Set(),
-          hasVerified: false,
-          hasEndConversation: false,
-        };
-      }
-      const s = sessionMap[row.session_id];
-      s.count++;
-      if (row.created_at > s.latest) s.latest = row.created_at;
-      if (row.created_at < s.earliest) s.earliest = row.created_at;
+    logStatus('Loaded ' + allSessions.length + ' sessions via RPC.');
+    return true;
+  } catch (err) {
+    logStatus('Session fetch FAILED: ' + (err.message || String(err)));
+    console.error('loadDefaultSessions error:', err);
+    return false;
+  }
+}
 
-      // Parse message for metadata
-      try {
-        const msg = typeof row.message === 'string' ? JSON.parse(row.message) : row.message;
-        if (!msg) continue;
+// Load 10 more sessions (older) — called on infinite scroll
+async function loadMoreSessions() {
+  if (isLoadingMore || noMoreSessions || !db) return;
+  isLoadingMore = true;
 
-        // Count by type
-        const mtype = msg.type || 'unknown';
-        if (s.typeCounts[mtype] !== undefined) s.typeCounts[mtype]++;
+  // Show a small loading indicator at the bottom of the list
+  const loader = document.createElement('li');
+  loader.className = 'scroll-loader';
+  loader.textContent = 'Loading more sessions...';
+  sessionList.appendChild(loader);
 
-        // Extract tool names
-        if (msg.tool_calls && Array.isArray(msg.tool_calls)) {
-          for (const tc of msg.tool_calls) {
-            if (tc.name) { s.tools.add(tc.name); globalToolSet.add(tc.name); }
-          }
-        }
-        if (mtype === 'tool' && msg.name) {
-          s.tools.add(msg.name); globalToolSet.add(msg.name);
-        }
-
-        // Extract AI metadata (category, request type, verified, end)
-        if (mtype === 'ai' && !(msg.tool_calls && msg.tool_calls.length > 0)) {
-          let content = msg.content;
-          if (typeof content === 'string') { try { content = JSON.parse(content); } catch { content = null; } }
-          if (content && content.output) {
-            if (content.output.request_category) {
-              s.categories.add(content.output.request_category);
-              globalCategorySet.add(content.output.request_category);
-            }
-            if (content.output.request_type) {
-              s.requestTypes.add(content.output.request_type);
-              globalRequestTypeSet.add(content.output.request_type);
-            }
-            if (content.output.identity_verified) s.hasVerified = true;
-            if (content.output.end_conversation) s.hasEndConversation = true;
-          }
-        }
-      } catch { /* skip unparseable */ }
+  try {
+    const params = { p_limit: 10, p_cursor: sessionCursor };
+    // If filters are active, include filter params
+    if (filtersApplied && currentFilterParams) {
+      Object.assign(params, currentFilterParams);
     }
 
-    // If we got fewer rows than the page size, we've reached the end
-    if (data.length < pageSize) break;
-    from += pageSize;
-  }
+    const { data, error } = await db.rpc('get_session_list', params);
+    if (error) { console.error('loadMoreSessions error:', error); return; }
 
-  logStatus('Total rows fetched: ' + rowsLoaded + ', unique sessions: ' + Object.keys(sessionMap).length);
-
-  allSessions = Object.entries(sessionMap)
-    .map(([id, info]) => ({
-      id,
-      count: info.count,
-      latest: info.latest,
-      earliest: info.earliest,
-      tools: Array.from(info.tools),
-      typeCounts: info.typeCounts,
-      categories: Array.from(info.categories),
-      requestTypes: Array.from(info.requestTypes),
-      hasVerified: info.hasVerified,
-      hasEndConversation: info.hasEndConversation,
-    }))
-    .sort((a, b) => b.latest.localeCompare(a.latest));
-
-  allToolNames = Array.from(globalToolSet).sort();
-  allCategories = Array.from(globalCategorySet).sort();
-  allRequestTypes = Array.from(globalRequestTypeSet).sort();
-
-  // Sync the sidebar from-date filter to reflect what was actually loaded
-  if (fromDateStr) {
-    if (!filterDateFrom.value || filterDateFrom.value > fromDateStr) {
-      filterDateFrom.value = fromDateStr;
+    const newSessions = parseSessionResults(data);
+    if (newSessions.length === 0) {
+      noMoreSessions = true;
+    } else {
+      allSessions = allSessions.concat(newSessions);
+      sessionCursor = newSessions[newSessions.length - 1].latest;
+      if (newSessions.length < 10) noMoreSessions = true;
     }
-  } else {
-    filterDateFrom.value = ''; // all time — no from-date filter
-  }
 
+    renderSessionList();
+    updateTimeGate();
+  } catch (err) {
+    console.error('loadMoreSessions failed:', err);
+  } finally {
+    loader.remove();
+    isLoadingMore = false;
+  }
+}
+
+// Infinite scroll handler for the session list sidebar
+function handleSessionListScroll() {
+  if (noMoreSessions || isLoadingMore) return;
+  const { scrollTop, scrollHeight, clientHeight } = sessionList;
+  if (scrollTop + clientHeight >= scrollHeight - 60) {
+    loadMoreSessions();
+  }
+}
+
+// Validate date range and show/hide warning (max 3 days)
+function validateDateRange() {
+  const from = filterDateFrom.value;
+  const to = filterDateTo.value;
+  if (from && to) {
+    const diffMs = new Date(to) - new Date(from);
+    const diffDays = diffMs / (1000 * 60 * 60 * 24);
+    if (diffDays > 3 || diffDays < 0) {
+      filterDateWarning.style.display = 'block';
+      filterApply.disabled = true;
+      return false;
+    }
+  }
+  filterDateWarning.style.display = 'none';
+  filterApply.disabled = false;
   return true;
+}
+
+// Apply server-side filters via the RPC
+async function applyFilters() {
+  if (!db) return;
+  if (!validateDateRange()) return;
+
+  const dateFrom = filterDateFrom.value;
+  const dateTo = filterDateTo.value;
+  const msgMin = filterMsgMin.value ? parseInt(filterMsgMin.value, 10) : null;
+  const msgMax = filterMsgMax.value ? parseInt(filterMsgMax.value, 10) : null;
+  const selectedTools = getCheckedValues(filterToolsPanel);
+  const selectedCategories = getCheckedValues(filterCategoryPanel);
+  const selectedReqTypes = getCheckedValues(filterRequestTypePanel);
+
+  // If no server-side filters specified, fall back to default load
+  const hasServerFilters = dateFrom || dateTo || msgMin !== null || msgMax !== null
+    || selectedTools.length > 0 || selectedCategories.length > 0 || selectedReqTypes.length > 0;
+
+  if (!hasServerFilters) {
+    // No server filters — just re-render with client-side sort/reviewed/search
+    loadingOverlay.style.display = 'flex';
+    await loadDefaultSessions();
+    loadingOverlay.style.display = 'none';
+    populateFilters();
+    renderSessionList();
+    updateTimeGate();
+    return;
+  }
+
+  // Auto-fill date range to last 3 days if not specified
+  const params = { p_limit: 50 };
+  if (dateFrom) {
+    params.p_date_from = dateFrom + 'T00:00:00';
+  } else {
+    // Default to 3 days ago
+    const d = new Date();
+    d.setDate(d.getDate() - 3);
+    params.p_date_from = d.toISOString().slice(0, 10) + 'T00:00:00';
+    filterDateFrom.value = params.p_date_from.slice(0, 10);
+  }
+  if (dateTo) {
+    params.p_date_to = dateTo + 'T23:59:59.999';
+  } else {
+    params.p_date_to = new Date().toISOString();
+    filterDateTo.value = params.p_date_to.slice(0, 10);
+  }
+  validateDateRange(); // re-validate after auto-fill
+  if (filterApply.disabled) return;
+
+  if (msgMin !== null && !isNaN(msgMin)) params.p_msg_min = msgMin;
+  if (msgMax !== null && !isNaN(msgMax)) params.p_msg_max = msgMax;
+  if (selectedTools.length > 0) params.p_tools = selectedTools;
+  if (selectedCategories.length > 0) params.p_categories = selectedCategories;
+  if (selectedReqTypes.length > 0) params.p_request_types = selectedReqTypes;
+
+  filtersApplied = true;
+  // Store filter params (without p_limit / p_cursor) for loadMore
+  currentFilterParams = { ...params };
+  delete currentFilterParams.p_limit;
+  delete currentFilterParams.p_cursor;
+  sessionCursor = null;
+  noMoreSessions = false;
+
+  loadingOverlay.style.display = 'flex';
+  try {
+    const { data, error } = await db.rpc('get_session_list', params);
+    if (error) {
+      console.error('applyFilters error:', error);
+      showLoginError('Filter query failed: ' + (error.message || 'Unknown error'));
+      return;
+    }
+    allSessions = parseSessionResults(data);
+    if (allSessions.length > 0) {
+      sessionCursor = allSessions[allSessions.length - 1].latest;
+    }
+    if (allSessions.length < 50) noMoreSessions = true;
+
+    renderSessionList();
+    updateTimeGate();
+  } catch (err) {
+    console.error('applyFilters failed:', err);
+  } finally {
+    loadingOverlay.style.display = 'none';
+  }
 }
 
 function populateFilters() {
@@ -693,17 +792,12 @@ function buildDropdown(panel, trigger, items, defaultLabel, activePrefix) {
   updateDropdownLabel(panel, trigger, defaultLabel, activePrefix);
 }
 
-function handlePeriodWarning() {
-  const v = parseInt(loadPeriodSelect.value, 10);
-  loadPeriodWarning.style.display = (v === 0 || v > 7) ? 'block' : 'none';
-}
-
 function updateLoadProgress(loaded, total) {
   if (!loadProgressBar || !loadProgressText) return;
   const pct = total > 0 ? Math.round((loaded / total) * 100) : 0;
   loadProgressBar.style.width = pct + '%';
   if (total === 0) {
-    loadProgressText.textContent = 'Counting rows…';
+    loadProgressText.textContent = 'Loading sessions…';
   } else if (loaded < total) {
     loadProgressText.textContent = `${loaded.toLocaleString()} of ${total.toLocaleString()} rows (${pct}%)`;
   } else {
@@ -711,7 +805,7 @@ function updateLoadProgress(loaded, total) {
   }
 }
 
-function clearFilters() {
+async function clearFilters() {
   filterDateFrom.value = '';
   filterDateTo.value = '';
   filterMsgMin.value = '';
@@ -724,19 +818,16 @@ function clearFilters() {
   filterRequestTypeTrigger.textContent = 'All types';
   filterSort.value = 'newest';
   filterReviewed.value = 'all';
-  renderSessionList();
-}
+  filterDateWarning.style.display = 'none';
+  filterApply.disabled = false;
 
-async function handleDateFromChange() {
-  const picked = filterDateFrom.value; // 'YYYY-MM-DD' or ''
-  // Re-fetch from server only if user picks a date earlier than the loaded window
-  if (picked && loadedFromDate && picked < loadedFromDate) {
-    loadingOverlay.style.display = 'flex';
-    await loadSessions(picked);
-    loadingOverlay.style.display = 'none';
-    populateFilters();
-  }
+  // Reset to default 50 most recent sessions
+  loadingOverlay.style.display = 'flex';
+  await loadDefaultSessions();
+  loadingOverlay.style.display = 'none';
+  populateFilters();
   renderSessionList();
+  updateTimeGate();
 }
 
 function buildTypePillsHtml(tc) {
@@ -765,14 +856,9 @@ function buildSessionBadgesHtml(session) {
 }
 
 function renderSessionList() {
+  // Client-side filters only: text search, reviewed, sort
+  // Server-side filters (date, tools, categories, etc.) are applied via the RPC
   const query = sessionSearch.value.trim().toLowerCase();
-  const dateFrom = filterDateFrom.value; // 'YYYY-MM-DD' or ''
-  const dateTo = filterDateTo.value;
-  const msgMin = filterMsgMin.value ? parseInt(filterMsgMin.value, 10) : null;
-  const msgMax = filterMsgMax.value ? parseInt(filterMsgMax.value, 10) : null;
-  const selectedTools = getCheckedValues(filterToolsPanel);
-  const selectedCategories = getCheckedValues(filterCategoryPanel);
-  const selectedReqTypes = getCheckedValues(filterRequestTypePanel);
   const sortBy = filterSort.value;
   const reviewedFilter = filterReviewed.value; // 'all', 'reviewed', 'unreviewed'
 
@@ -781,45 +867,6 @@ function renderSessionList() {
   // Text search
   if (query) {
     filtered = filtered.filter((s) => s.id.toLowerCase().includes(query));
-  }
-
-  // Date range (compare against session's date span: show if session overlaps the range)
-  if (dateFrom) {
-    filtered = filtered.filter((s) => s.latest >= dateFrom);
-  }
-  if (dateTo) {
-    // Include the full "to" day
-    const toEnd = dateTo + 'T23:59:59';
-    filtered = filtered.filter((s) => s.earliest <= toEnd);
-  }
-
-  // Message count
-  if (msgMin !== null && !isNaN(msgMin)) {
-    filtered = filtered.filter((s) => s.count >= msgMin);
-  }
-  if (msgMax !== null && !isNaN(msgMax)) {
-    filtered = filtered.filter((s) => s.count <= msgMax);
-  }
-
-  // Tools (session must contain ALL selected tools)
-  if (selectedTools.length > 0) {
-    filtered = filtered.filter((s) =>
-      selectedTools.every((t) => s.tools.includes(t))
-    );
-  }
-
-  // Categories (session must have at least one matching category)
-  if (selectedCategories.length > 0) {
-    filtered = filtered.filter((s) =>
-      selectedCategories.some((c) => s.categories.includes(c))
-    );
-  }
-
-  // Request types (session must have at least one matching request type)
-  if (selectedReqTypes.length > 0) {
-    filtered = filtered.filter((s) =>
-      selectedReqTypes.some((r) => s.requestTypes.includes(r))
-    );
   }
 
   // Reviewed filter
@@ -845,10 +892,8 @@ function renderSessionList() {
       filtered.sort((a, b) => b.latest.localeCompare(a.latest));
   }
 
-  const hasFilters = query || dateFrom || dateTo || msgMin !== null || msgMax !== null
-    || selectedTools.length > 0 || selectedCategories.length > 0 || selectedReqTypes.length > 0
-    || reviewedFilter !== 'all';
-  sessionCount.textContent = `${filtered.length} session${filtered.length !== 1 ? 's' : ''}${hasFilters ? ' found' : ''}`;
+  const label = filtersApplied ? ' found' : '';
+  sessionCount.textContent = `${filtered.length} session${filtered.length !== 1 ? 's' : ''}${label}${noMoreSessions ? '' : '+'}`;
 
   sessionList.innerHTML = '';
   for (const session of filtered) {
@@ -1367,12 +1412,39 @@ function escapeHtml(str) {
 }
 
 const TIME_ZONE = 'Europe/Chisinau';
-const LOAD_DAYS_DEFAULT = 3; // days of history to load on initial/default fetch
 
-function defaultFromDate() {
-  const d = new Date();
-  d.setDate(d.getDate() - LOAD_DAYS_DEFAULT);
-  return d.toISOString().slice(0, 10); // 'YYYY-MM-DD'
+// Show the current environment name near the Live badge
+function showEnvBadge() {
+  if (!envBadge) return;
+  const savedEnvIdx = parseInt(localStorage.getItem('sb_selected_env') || '0', 10);
+  const env = environments[savedEnvIdx] || environments[0];
+  if (env && env.name) {
+    envBadge.textContent = env.name;
+    envBadge.classList.add('active');
+  } else {
+    envBadge.classList.remove('active');
+  }
+}
+
+// Update the time-gate display showing the visible time window
+function updateTimeGate() {
+  if (!timeGateEl) return;
+  if (allSessions.length === 0) { timeGateEl.textContent = ''; return; }
+  // Find the min earliest and max latest across loaded sessions
+  let oldest = allSessions[0].earliest;
+  let newest = allSessions[0].latest;
+  for (const s of allSessions) {
+    if (s.earliest < oldest) oldest = s.earliest;
+    if (s.latest > newest) newest = s.latest;
+  }
+  const fmt = (iso) => {
+    const d = new Date(iso);
+    return d.toLocaleString('en-US', {
+      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+      hour12: false, timeZone: TIME_ZONE,
+    });
+  };
+  timeGateEl.textContent = fmt(oldest) + ' — ' + fmt(newest);
 }
 
 function formatDate(isoStr) {
