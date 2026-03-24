@@ -1,12 +1,12 @@
 -- ============================================================================
--- Migration: Session list RPCs for lazy-loading architecture
+-- Migration Step 1 of 2: Functions (run this FIRST in Supabase SQL Editor)
 -- ============================================================================
--- Creates two RPC functions and supporting indexes:
+-- Creates:
 --   1. safe_jsonb(text)         — error-tolerant text→jsonb cast
 --   2. get_session_list(...)    — paginated, filterable session summaries
 --   3. get_filter_options()     — distinct tools / categories / request types
 --
--- Deploy:  supabase db push   (or paste into Supabase SQL Editor)
+-- Safe to run multiple times (CREATE OR REPLACE).
 -- ============================================================================
 
 -- ── Helper: safe JSON cast ──────────────────────────────────────────────────
@@ -21,20 +21,6 @@ EXCEPTION WHEN OTHERS THEN
   RETURN NULL;
 END;
 $$;
-
--- ── Performance indexes ─────────────────────────────────────────────────────
--- Using CONCURRENTLY to avoid blocking reads/writes during index creation.
--- IMPORTANT: CONCURRENTLY cannot run inside a transaction. In Supabase SQL
--- Editor, run each CREATE INDEX statement individually (not as part of the
--- full migration script). Alternatively, run them via psql with autocommit.
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_chat_messages_created_at
-  ON chat_messages (created_at DESC);
-
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_chat_messages_session_id
-  ON chat_messages (session_id);
-
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_chat_messages_session_created
-  ON chat_messages (session_id, created_at DESC);
 
 -- ── RPC: get_session_list ───────────────────────────────────────────────────
 -- Returns a JSON array of session summary objects, supporting:
