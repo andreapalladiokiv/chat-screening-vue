@@ -263,3 +263,9 @@ BEGIN
   RETURN result;
 END;
 $$;
+
+-- ── Permissions ──────────────────────────────────────────────────────────────
+-- Required so the Supabase anon/authenticated roles can call these RPCs.
+GRANT EXECUTE ON FUNCTION safe_jsonb(text) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION get_session_list(int, text, text, text, int, int, text[], text[], text[]) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION get_filter_options() TO anon, authenticated;
