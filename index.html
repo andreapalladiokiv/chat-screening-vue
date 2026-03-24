@@ -414,12 +414,7 @@
       flex-shrink: 0;
     }
 
-    .session-count {
-      font-size: 11px;
-      color: var(--text-secondary);
-      padding: 8px 16px;
-      border-bottom: 1px solid var(--border);
-    }
+    /* session-count styling moved to .session-info-bar */
 
     /* Filter Panel */
     .filter-toggle {
@@ -554,6 +549,71 @@
     .filter-clear-btn:hover {
       border-color: var(--danger);
       color: var(--danger);
+    }
+
+    .filter-actions-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 4px;
+      margin-bottom: 4px;
+    }
+    .filter-apply-btn {
+      flex: 1;
+      padding: 6px 12px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .filter-apply-btn:hover { background: var(--accent-hover); }
+    .filter-apply-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .filter-date-warning {
+      color: var(--danger);
+      font-size: 11px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .session-info-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 16px;
+      border-bottom: 1px solid var(--border);
+      min-height: 28px;
+    }
+    .session-count {
+      font-size: 12px;
+      color: var(--text-secondary);
+      font-weight: 600;
+    }
+    .time-gate {
+      font-size: 10px;
+      color: var(--text-secondary);
+      white-space: nowrap;
+    }
+
+    .env-badge {
+      display: none;
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 10px;
+      background: #e8eaf6;
+      color: #3949ab;
+      white-space: nowrap;
+    }
+    .env-badge.active { display: inline-block; }
+
+    .scroll-loader {
+      text-align: center;
+      padding: 10px;
+      font-size: 12px;
+      color: var(--text-secondary);
     }
 
     /* Main Chat Area */
@@ -1201,11 +1261,6 @@
     }
 
     /* Load period warning */
-    .load-period-warning {
-      margin: 6px 0 0;
-      font-size: 12px;
-      color: #b45309;
-    }
 
     /* Loading progress overlay */
     #loading-overlay {
@@ -1262,16 +1317,6 @@
         <label for="env-select">Environment</label>
         <select id="env-select"></select>
       </div>
-      <div class="env-selector" id="load-period-wrap">
-        <label for="load-period-select">Load period</label>
-        <select id="load-period-select">
-          <option value="3">Last 3 days</option>
-          <option value="7">Last 7 days</option>
-        </select>
-        <p class="load-period-warning" id="load-period-warning" style="display:none">
-          Loading a long period may take extra time depending on your data volume.
-        </p>
-      </div>
       <button class="btn google-btn" id="connect-btn">
         <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0;"><path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/><path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853"/><path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/><path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z" fill="#EA4335"/></svg>
         Sign in with Google
@@ -1316,6 +1361,7 @@
           </div>
         </div>
         <div class="sidebar-header-right">
+          <span class="env-badge" id="env-badge"></span>
           <span class="live-badge" id="live-badge"><span class="live-dot"></span>Live</span>
         </div>
       </div>
@@ -1379,11 +1425,16 @@
             <option value="reviewed">Reviewed only</option>
           </select>
         </div>
-        <div class="filter-row">
-          <button class="filter-clear-btn" id="filter-clear">Clear filters</button>
+        <div id="filter-date-warning" class="filter-date-warning" style="display:none">Date range must not exceed 3 days.</div>
+        <div class="filter-actions-row">
+          <button class="filter-apply-btn" id="filter-apply">Apply Filters</button>
+          <button class="filter-clear-btn" id="filter-clear">Clear Filters</button>
         </div>
       </div>
-      <div class="session-count" id="session-count"></div>
+      <div class="session-info-bar">
+        <span class="session-count" id="session-count"></span>
+        <span class="time-gate" id="time-gate"></span>
+      </div>
       <ul class="session-list" id="session-list"></ul>
     </div>
 
@@ -1485,7 +1536,7 @@
   </script>
   <!-- config.js is gitignored; its absence is fine — the app falls back to manual entry -->
   <script src="config.js" onerror="console.info('config.js not found — using manual credential entry.');"></script>
-  <script src="app.js?v=35"
+  <script src="app.js?v=36"
           onerror="document.getElementById('login-error').style.display='block'; document.getElementById('login-error').textContent='Failed to load app.js.';">
   </script>
 </body>
