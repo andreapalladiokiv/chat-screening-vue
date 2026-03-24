@@ -558,7 +558,12 @@ function clearStatusLog() {
 // Fetch all distinct filter options from the DB (called once at login / refresh)
 async function loadFilterOptions() {
   try {
-    const { data, error } = await db.rpc('get_filter_options');
+    // Race against a 8s timeout so a slow query doesn't block login
+    const rpcPromise = db.rpc('get_filter_options');
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('get_filter_options timed out')), 8000)
+    );
+    const { data, error } = await Promise.race([rpcPromise, timeoutPromise]);
     if (error) { console.warn('[filters] get_filter_options error:', error); return; }
     if (data) {
       allToolNames = (data.tools || []).sort();
@@ -566,7 +571,7 @@ async function loadFilterOptions() {
       allRequestTypes = (data.request_types || []).sort();
     }
   } catch (err) {
-    console.warn('[filters] loadFilterOptions failed:', err);
+    console.warn('[filters] loadFilterOptions skipped:', err.message);
   }
 }
 

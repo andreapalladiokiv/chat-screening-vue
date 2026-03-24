@@ -238,14 +238,14 @@ END;
 $$;
 
 -- ── RPC: get_filter_options ─────────────────────────────────────────────────
--- Scoped to last 30 days for performance on large tables.
+-- Scoped to last 7 days for performance on large tables.
 -- ────────────────────────────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION get_filter_options()
 RETURNS jsonb
 LANGUAGE plpgsql STABLE
 AS $$
 DECLARE
-  v_since timestamptz := NOW() - INTERVAL '30 days';
+  v_since timestamptz := NOW() - INTERVAL '7 days';
   result jsonb;
 BEGIN
   WITH
