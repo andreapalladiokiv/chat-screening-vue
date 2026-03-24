@@ -23,13 +23,17 @@ END;
 $$;
 
 -- ── Performance indexes ─────────────────────────────────────────────────────
-CREATE INDEX IF NOT EXISTS idx_chat_messages_created_at
+-- Using CONCURRENTLY to avoid blocking reads/writes during index creation.
+-- IMPORTANT: CONCURRENTLY cannot run inside a transaction. In Supabase SQL
+-- Editor, run each CREATE INDEX statement individually (not as part of the
+-- full migration script). Alternatively, run them via psql with autocommit.
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_chat_messages_created_at
   ON chat_messages (created_at DESC);
 
-CREATE INDEX IF NOT EXISTS idx_chat_messages_session_id
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_chat_messages_session_id
   ON chat_messages (session_id);
 
-CREATE INDEX IF NOT EXISTS idx_chat_messages_session_created
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_chat_messages_session_created
   ON chat_messages (session_id, created_at DESC);
 
 -- ── RPC: get_session_list ───────────────────────────────────────────────────
