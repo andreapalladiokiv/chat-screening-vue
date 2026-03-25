@@ -328,6 +328,7 @@ Since there is no build step:
 1. Edit `index.html` (for HTML structure or CSS changes) or `app.js` (for logic changes)
 2. Reload the browser
 3. Increment the `?v=N` cache-busting param in `index.html` when deploying
+4. **Update documentation** (see rule below)
 
 For Edge Function changes:
 1. Edit `supabase/functions/chat-feedback/index.ts`
@@ -336,6 +337,16 @@ For Edge Function changes:
 For `invite-user` Edge Function changes:
 1. Edit `supabase/functions/invite-user/index.ts`
 2. Deploy: `supabase functions deploy invite-user`
+
+### Documentation update rule (MANDATORY)
+
+After every implementation — whether it is a new feature, bug fix, refactor, schema change, or new file — you **must** update the relevant documentation before considering the work done:
+
+- **CLAUDE.md** — update repository structure, database schema, code conventions, or any section that the change affects
+- **FEATURES.md** — add or modify the feature checklist entry; move todo items to implemented when done
+- **README.md** — update if the change affects the quick start steps or project description
+
+This is not optional. Outdated docs cause wasted time in every future session. Treat doc updates as part of the implementation, not a follow-up task.
 
 ## Git
 
