@@ -27,7 +27,8 @@ chat-view/
     └── migrations/
         ├── create_chat_feedback.sql        # DB schema for feedback table
         ├── create_user_roles.sql           # DB schema + RLS + trigger for user roles
-        └── create_session_rpc.sql          # RPCs: get_session_list, get_filter_options + indexes
+        ├── create_session_rpc.sql          # RPCs: get_session_list, get_filter_options (two-stage architecture)
+        └── create_session_indexes.sql     # Performance indexes (run separately, CONCURRENTLY)
 ```
 
 ## Technology Stack
@@ -206,14 +207,15 @@ The Edge Function:
 
 - **No framework** — plain DOM manipulation with `document.createElement`, `innerHTML`, `addEventListener`
 - **Module pattern** — IIFE `init()` runs on load; no ES modules
-- **Global state** — `db`, `allSessions`, `allToolNames`, `allCategories`, `allRequestTypes`, `currentSessionId`, `feedbackMeta`, `reviewedSessions`, `environments`, `currentUserRole`, `sessionCursor`, `isLoadingMore`, `noMoreSessions`, `filtersApplied`, `currentFilterParams` are top-level variables
+- **Global state** — `db`, `allSessions`, `allToolNames`, `allCategories`, `allRequestTypes`, `currentSessionId`, `feedbackMeta`, `reviewedSessions`, `environments`, `currentUserRole`, `sessionCursor`, `isLoadingMore`, `noMoreSessions`, `filtersApplied`, `currentFilterParams`, `searchResults`, `searchDebounceTimer` are top-level variables
 - **XSS prevention** — all user-supplied or database-sourced text is passed through `escapeHtml()` before setting `innerHTML`. Never set `innerHTML` with raw data.
-- **Lazy loading** — Session list uses RPC `get_session_list` for paginated, server-side-filtered session summaries. Default load: 50 most recent sessions. Infinite scroll loads 10 more per batch. Filters are applied server-side with a max 3-day date range. Filter options (tools, categories, request types) are fetched once at login via `get_filter_options` RPC
+- **Lazy loading** — Session list uses RPC `get_session_list` (two-stage architecture: fast GROUP BY for candidate IDs, then JSONB metadata extraction for those sessions only). Default load: 50 most recent sessions. Infinite scroll loads 10 more per batch. Filters are applied server-side via "Apply Filters" button with a max 3-day date range. Filter options (tools, categories, request types) are fetched once at login via `get_filter_options` RPC (scoped to last 7 days)
+- **Server-side search** — Session ID search queries the entire `chat_messages` table via `p_session_id` ILIKE parameter on `get_session_list`. Debounced at 400ms with a "Searching..." indicator
 - **Timezone** — All dates displayed in `'Europe/Chisinau'` timezone (hardcoded constant `TIME_ZONE` near the bottom of `app.js`)
 - **Error handling** — connection errors shown in `#login-error`; message errors logged to console
 - **Status log** — `logStatus()` is a no-op that writes to `console.log` only; the visible status log was removed from the login UI
-- **Environment badge** — shows the current environment name near the Live badge in the sidebar header
-- **Time gate** — shows the time range of currently loaded sessions in the session info bar
+- **Environment switcher** — dropdown in the sidebar header (near Live badge) allows switching environments without logging out; triggers sign-out, re-auth with the new project's OAuth
+- **Time gate** — shows the time range (last-activity based) of currently loaded sessions in the session info bar
 
 ### CSS (index.html)
 
@@ -232,9 +234,9 @@ The Edge Function:
   - `.chat-area` — wraps the header bar and `#chat-main`:
     - `#chat-header-bar` — permanent header with `#chat-session-controls` (left, session-specific) and `.chat-header-right` (right: Refresh button)
     - `#chat-main` — scrollable message area; wiped and repopulated on session switch
-- `app.js` is loaded with a cache-busting query param (`?v=35`) — increment this when deploying changes
+- `app.js` is loaded with a cache-busting query param (`?v=42`) — increment this when deploying changes
 - Login panel contains only the environment selector (if multi-env), "Sign in with Google" button, and `#login-error`; no credential input fields, no status log
-- Sidebar header shows env badge and Live badge; session info bar below filters shows session count + time gate
+- Sidebar header shows environment switcher dropdown and Live badge; session info bar below filters shows session count + time gate
 
 ## Filtering Logic
 
@@ -247,8 +249,10 @@ Filtering is split between server-side (RPC) and client-side:
 - **Categories** — session must match **at least one** selected category (OR logic)
 - **Request types** — session must match **at least one** selected request type (OR logic)
 
+**Server-side search (debounced, via search input):**
+- **Session ID search** — ILIKE substring match on `session_id` across the entire database; 400ms debounce; returns up to 50 results
+
 **Client-side (instant, in `renderSessionList()`):**
-- **Text search** — substring match on `session_id`
 - **Sort** — newest / oldest / most messages / fewest messages (sorts loaded sessions only)
 - **Reviewed** — `all` / `reviewed` / `unreviewed`
 
@@ -265,7 +269,7 @@ Reviewed state is managed client-side (no database writes):
 
 1. **Edge function slug**: The file is `supabase/functions/chat-feedback/` and the frontend calls `db.functions.invoke('chat-feedback', ...)`. The deployed Supabase slug must match — if you redeploy under a different name, update the `invoke` call in `submitFeedback()` (`app.js`) accordingly.
 
-2. **Cache-busting**: `app.js` is loaded as `app.js?v=36`. Increment the version number when deploying updated `app.js` to avoid browsers serving stale cached versions. Forgetting this has caused runtime errors when HTML and JS are out of sync (e.g. removing a DOM element that old JS still references).
+2. **Cache-busting**: `app.js` is loaded as `app.js?v=42`. Increment the version number when deploying updated `app.js` to avoid browsers serving stale cached versions. Forgetting this has caused runtime errors when HTML and JS are out of sync (e.g. removing a DOM element that old JS still references).
 
 3. **config.js is required**: The login UI has no manual credential input fields. If `config.js` is absent and no credentials are saved in `localStorage`, the Google sign-in button will display an error. Always deploy `config.js` alongside `index.html`. Use the multi-env `environments` array format to expose a named dropdown for multiple Supabase projects.
 

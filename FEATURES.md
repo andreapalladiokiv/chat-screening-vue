@@ -40,15 +40,18 @@ Update this file whenever a feature is added, changed, or completed.
 - [x] Pulsing `• Live` badge shown next to burger menu in sidebar header
 
 ### Session List
-- [x] All sessions loaded via paginated fetching (1000 rows/page) to handle large tables
+- [x] **Lazy-loading architecture** — default load: 50 most recent sessions via `get_session_list` RPC (two-stage: fast GROUP BY for IDs, then JSONB metadata extraction)
+- [x] **Infinite scroll** — scrolling to the bottom of the session list loads 10 more sessions per batch
 - [x] Sessions grouped by `session_id`, sorted by selected sort order
 - [x] Each session shows: ID, total message count, latest date, type-count pills, metadata badges
 - [x] Type-count pills: human / ai / tool / system message counts per session
 - [x] Metadata badges per session: request category, request type, `verified`, `end`, `reviewed` flags
-- [x] Refresh button reloads all sessions from the database
+- [x] Refresh button reloads sessions (respects active filters)
 - [x] Realtime updates: new messages and sessions appear automatically via Supabase Realtime (INSERT events)
 - [x] Pulsing `• Live` badge shown in sidebar header when Realtime channel is active (`SUBSCRIBED`)
 - [x] Filters and sort order preserved across realtime updates and manual refreshes
+- [x] **Time gate** — session info bar shows the time range (last-activity based) of currently loaded sessions
+- [x] **Environment switcher** — dropdown in sidebar header allows switching environments without returning to login
 
 ### Mark as Reviewed
 - [x] "Mark Reviewed" button in the chat header toggles reviewed state for the open session
@@ -64,21 +67,24 @@ Update this file whenever a feature is added, changed, or completed.
 - [x] Invite logic handled by `invite-user` Edge Function (admin-only, requires valid JWT + admin role check)
 
 ### Filtering & Search
-- [x] Text search: substring match on `session_id`
-- [x] Date range filter (from/to), inclusive of the full "to" day
+- [x] **Server-side session ID search** — searches the entire `chat_messages` database via ILIKE; debounced at 400ms with "Searching..." indicator; returns up to 50 matches
+- [x] **"Apply Filters" button** — server-side filters (date, tools, categories, request types, message count) applied on click via RPC
+- [x] Date range filter (from/to) — max 3-day gap enforced with warning; auto-fills last 3 days if not specified
 - [x] Message count filter (min/max), inclusive
 - [x] Tools filter: multi-select dropdown+checklist, AND logic (session must use ALL selected tools)
 - [x] Category filter: multi-select dropdown+checklist, OR logic (session matches any selected category)
 - [x] Request type filter: multi-select dropdown+checklist, OR logic (session matches any selected type)
-- [x] Reviewed filter: all / unreviewed only / reviewed only
-- [x] Sort: newest first, oldest first, most messages, fewest messages
-- [x] Clear filters button resets all filter inputs
-- [x] Session count shown ("N sessions" or "N of M sessions" when filters are active)
+- [x] Reviewed filter: all / unreviewed only / reviewed only (client-side)
+- [x] Sort: newest first, oldest first, most messages, fewest messages (client-side, on loaded sessions)
+- [x] **Clear Filters** button resets all filter inputs and reloads default 50 sessions
+- [x] Filter inputs persist after Apply (only cleared on Clear Filters)
+- [x] Session count shown ("N sessions+" or "N sessions found" when filters active)
 - [x] Collapsible filter panel (toggle open/closed)
 - [x] Custom dropdown+checklist UI for tools, category, and request type:
   - Trigger button label updates to show count of selected items (e.g. "Tools (2)")
   - Clicking outside any open dropdown closes it; opening one closes the others
   - Checked state preserved when realtime updates rebuild dropdown options
+- [x] Filter dropdown options populated from `get_filter_options` RPC (scoped to last 7 days)
 
 ### Message View
 - [x] Messages loaded on session click, ordered by `created_at` ascending
@@ -108,7 +114,9 @@ Update this file whenever a feature is added, changed, or completed.
 - [x] WhatsApp-inspired design with CSS custom properties for theming
 - [x] Responsive layout: sidebar overlays at ≤768px
 - [x] Collapsible tool call / tool result details (`<details>` element)
-- [x] Cache-busting query param on `app.js` (`?v=35`) — increment when deploying
+- [x] Cache-busting query param on `app.js` (`?v=42`) — increment when deploying
+- [x] Loading overlay during session load and filter apply
+- [x] "Searching..." indicator in session list during server-side search
 - [x] Global JS error handler shows errors in the browser console
 - [x] CDN load error handler for Supabase library (error shown in `#login-error`)
 
