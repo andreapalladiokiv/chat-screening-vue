@@ -20,6 +20,9 @@ EXCEPTION WHEN OTHERS THEN
 END;
 $$;
 
+-- Drop old signature so CREATE OR REPLACE works with the new parameter list
+DROP FUNCTION IF EXISTS get_session_list(int, text, text, text, int, int, text[], text[], text[]);
+
 -- ── RPC: get_session_list ───────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION get_session_list(
   p_limit         int      DEFAULT 50,
@@ -30,7 +33,8 @@ CREATE OR REPLACE FUNCTION get_session_list(
   p_msg_max       int      DEFAULT NULL,
   p_tools         text[]   DEFAULT NULL,
   p_categories    text[]   DEFAULT NULL,
-  p_request_types text[]   DEFAULT NULL
+  p_request_types text[]   DEFAULT NULL,
+  p_session_id    text     DEFAULT NULL    -- substring search on session_id (searches ALL data)
 )
 RETURNS jsonb
 LANGUAGE plpgsql STABLE
@@ -57,6 +61,7 @@ BEGIN
       FROM   chat_messages cm
       WHERE  (v_date_from IS NULL OR cm.created_at >= v_date_from)
         AND  (v_date_to   IS NULL OR cm.created_at <= v_date_to)
+        AND  (p_session_id IS NULL OR cm.session_id ILIKE '%' || p_session_id || '%')
       GROUP BY cm.session_id
       HAVING (v_cursor  IS NULL OR MAX(cm.created_at) < v_cursor)
         AND  (p_msg_min IS NULL OR COUNT(*) >= p_msg_min)
@@ -78,6 +83,7 @@ BEGIN
       FROM   chat_messages
       WHERE  (v_date_from IS NULL OR created_at >= v_date_from)
         AND  (v_date_to   IS NULL OR created_at <= v_date_to)
+        AND  (p_session_id IS NULL OR session_id ILIKE '%' || p_session_id || '%')
     ),
     msg_tools AS (
       SELECT DISTINCT b.session_id, tc.val->>'name' AS tool_name
@@ -312,5 +318,5 @@ $$;
 
 -- ── Permissions ──────────────────────────────────────────────────────────────
 GRANT EXECUTE ON FUNCTION safe_jsonb(text) TO anon, authenticated;
-GRANT EXECUTE ON FUNCTION get_session_list(int, text, text, text, int, int, text[], text[], text[]) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION get_session_list(int, text, text, text, int, int, text[], text[], text[], text) TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION get_filter_options() TO anon, authenticated;
