@@ -592,8 +592,9 @@
       font-weight: 600;
     }
     .time-gate {
-      font-size: 10px;
-      color: var(--text-secondary);
+      font-size: 11px;
+      color: var(--accent);
+      font-weight: 600;
       white-space: nowrap;
     }
 
@@ -1553,7 +1554,7 @@
   </script>
   <!-- config.js is gitignored; its absence is fine — the app falls back to manual entry -->
   <script src="config.js" onerror="console.info('config.js not found — using manual credential entry.');"></script>
-  <script src="app.js?v=40"
+  <script src="app.js?v=42"
           onerror="document.getElementById('login-error').style.display='block'; document.getElementById('login-error').textContent='Failed to load app.js.';">
   </script>
 </body>
