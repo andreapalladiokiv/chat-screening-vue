@@ -13,10 +13,12 @@ The application is a zero-build-step frontend: open `index.html` in a browser an
 ```
 chat-view/
 ├── index.html                              # Single-page app (HTML + all CSS)
-├── app.js                                  # All application logic
+├── app.js                                  # All application logic (~1700 lines)
 ├── config.js                               # Gitignored — Supabase credentials, multi-env config + optional domain restriction
 ├── favicon.svg                             # Eyes emoji favicon
+├── CLAUDE.md                               # AI assistant context (this file)
 ├── FEATURES.md                             # Feature list and todo tracker
+├── README.md                               # Project overview
 ├── SETUP.md                                # Google OAuth setup guide
 └── supabase/
     ├── functions/
@@ -24,11 +26,15 @@ chat-view/
     │   │   └── index.ts                    # Deno Edge Function: store & forward feedback
     │   └── invite-user/
     │       └── index.ts                    # Deno Edge Function: admin invite + role upsert
-    └── migrations/
-        ├── create_chat_feedback.sql        # DB schema for feedback table
-        ├── create_user_roles.sql           # DB schema + RLS + trigger for user roles
-        ├── create_session_rpc.sql          # RPCs: get_session_list, get_filter_options (two-stage architecture)
-        └── create_session_indexes.sql     # Performance indexes (run separately, CONCURRENTLY)
+    ├── migrations/
+    │   ├── create_chat_feedback.sql        # DB schema for feedback table
+    │   ├── add_submitted_by_to_chat_feedback.sql  # Adds submitted_by column
+    │   ├── create_user_roles.sql           # DB schema + RLS + trigger for user roles
+    │   ├── first_user_admin_role.sql       # Override: first user gets admin role
+    │   ├── create_session_rpc.sql          # RPCs: get_session_list, get_filter_options (two-stage architecture)
+    │   └── create_session_indexes.sql      # Performance indexes (run separately, CONCURRENTLY)
+    └── setup/
+        └── chat_messages_rls.sql           # RLS policy for chat_messages (prerequisite)
 ```
 
 ## Technology Stack
@@ -99,6 +105,24 @@ The app reads from a `chat_messages` table (not created in this repo — it must
 
 ### `chat_feedback` table (created by migration)
 
+| Column | Type | Notes |
+|---|---|---|
+| `id` | bigint | Primary key (identity) |
+| `feedback_type` | text | `'chat'` or `'message'` |
+| `category` | text | bug / suggestion / praise / other |
+| `comment` | text | Free-text feedback |
+| `session_id` | text | Target session |
+| `message_index` | int | Index of target message (message feedback only) |
+| `message_type` | text | Type of target message |
+| `message_timestamp` | timestamptz | Timestamp of target message |
+| `message_text_excerpt` | text | Excerpt of target message |
+| `tool_name` | text | Tool name (if message is a tool call) |
+| `message_count` | int | Total messages in session at time of feedback |
+| `raw_message` | jsonb | Full message object |
+| `submitted_by` | text | Email of user who submitted feedback |
+| `submitted_at` | timestamptz | When the feedback was submitted |
+| `created_at` | timestamptz | Row creation time |
+
 Run the migrations on your Supabase project:
 ```bash
 supabase db push
@@ -117,6 +141,20 @@ supabase db push
 | `updated_at` | timestamptz | |
 
 RLS is enabled; users may only read their own row (anon key access). A DB trigger (`on_auth_user_created`) auto-inserts a `'user'` row when a new `auth.users` record is created, covering both Google OAuth sign-ins and accepted invitations.
+
+**First-user admin override**: Running `first_user_admin_role.sql` replaces the trigger so that the very first user to sign up gets the `'admin'` role. All subsequent users get `'user'` as normal.
+
+### RPC Functions (created by `create_session_rpc.sql`)
+
+| Function | Returns | Purpose |
+|---|---|---|
+| `safe_jsonb(val text)` | `jsonb` | Safe JSON cast — returns `NULL` on parse failure instead of raising an error |
+| `get_session_list(...)` | `jsonb` | Two-stage session query: Stage 1 finds candidate session IDs via lightweight GROUP BY; Stage 2 extracts full JSONB metadata for those sessions only. Accepts params: `p_limit`, `p_cursor`, `p_date_from`, `p_date_to`, `p_msg_min`, `p_msg_max`, `p_tools`, `p_categories`, `p_request_types`, `p_session_id` |
+| `get_filter_options()` | `jsonb` | Returns distinct tool names, categories, and request types from the last 7 days |
+
+### Prerequisite setup (`supabase/setup/`)
+
+`chat_messages_rls.sql` — enables RLS on `chat_messages` and creates a `SELECT` policy for authenticated users. Without this, authenticated users will see 0 sessions. This is in `setup/` (not `migrations/`) because it targets a pre-existing table not managed by this repo.
 
 ## Message Format
 
