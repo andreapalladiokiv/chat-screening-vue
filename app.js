@@ -686,6 +686,10 @@ function handleSessionSearch() {
     updateTimeGate();
     return;
   }
+  // Show searching indicator immediately
+  sessionList.innerHTML = '<li class="scroll-loader">Searching...</li>';
+  sessionCount.textContent = 'Searching...';
+
   // Debounce: wait 400ms after last keystroke before hitting the server
   searchDebounceTimer = setTimeout(async () => {
     if (!db) return;
@@ -694,9 +698,10 @@ function handleSessionSearch() {
         p_limit: 50,
         p_session_id: query,
       });
+      // If the search box was cleared while the RPC was in flight, ignore results
+      if (!sessionSearch.value.trim()) { searchResults = null; renderSessionList(); return; }
       if (error) {
         console.warn('[search] RPC error:', error);
-        // Fallback to client-side filter on loaded sessions
         searchResults = null;
         renderSessionList();
         return;
