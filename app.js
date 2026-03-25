@@ -14,6 +14,8 @@ let isLoadingMore = false;   // guard against concurrent scroll-loads
 let noMoreSessions = false;  // true when server returned fewer than requested
 let filtersApplied = false;  // true when server-side filters are active
 let currentFilterParams = null; // stored RPC params when filters are applied (for loadMore)
+let searchResults = null;       // non-null when server-side session_id search is active
+let searchDebounceTimer = null; // debounce timer for search input
 
 // ── DOM Elements ──
 const loginPanel = document.getElementById('login-panel');
@@ -90,7 +92,7 @@ console.log('[app.js] Script loaded. Supabase available:', !!(window.supabase &&
 (async function init() {
   connectBtn.addEventListener('click', handleGoogleSignIn);
   refreshBtn.addEventListener('click', handleRefresh);
-  sessionSearch.addEventListener('input', renderSessionList);
+  sessionSearch.addEventListener('input', handleSessionSearch);
 
   // Filter controls
   filterToggle.addEventListener('click', () => {
@@ -382,6 +384,9 @@ async function handleLogout() {
   noMoreSessions = false;
   filtersApplied = false;
   currentFilterParams = null;
+  searchResults = null;
+  clearTimeout(searchDebounceTimer);
+  sessionSearch.value = '';
   if (envSwitcher) { envSwitcher.classList.remove('active'); envSwitcher.innerHTML = ''; }
   if (timeGateEl) timeGateEl.textContent = '';
   burgerUserEmail.textContent = '';
@@ -663,11 +668,48 @@ async function loadMoreSessions() {
 
 // Infinite scroll handler for the session list sidebar
 function handleSessionListScroll() {
-  if (noMoreSessions || isLoadingMore) return;
+  if (noMoreSessions || isLoadingMore || searchResults !== null) return;
   const { scrollTop, scrollHeight, clientHeight } = sessionList;
   if (scrollTop + clientHeight >= scrollHeight - 60) {
     loadMoreSessions();
   }
+}
+
+// Server-side session_id search with debounce
+function handleSessionSearch() {
+  clearTimeout(searchDebounceTimer);
+  const query = sessionSearch.value.trim();
+  if (!query) {
+    // Cleared — restore normal view
+    searchResults = null;
+    renderSessionList();
+    updateTimeGate();
+    return;
+  }
+  // Debounce: wait 400ms after last keystroke before hitting the server
+  searchDebounceTimer = setTimeout(async () => {
+    if (!db) return;
+    try {
+      const { data, error } = await db.rpc('get_session_list', {
+        p_limit: 50,
+        p_session_id: query,
+      });
+      if (error) {
+        console.warn('[search] RPC error:', error);
+        // Fallback to client-side filter on loaded sessions
+        searchResults = null;
+        renderSessionList();
+        return;
+      }
+      searchResults = parseSessionResults(data);
+      renderSessionList();
+      updateTimeGate();
+    } catch (err) {
+      console.warn('[search] Failed:', err);
+      searchResults = null;
+      renderSessionList();
+    }
+  }, 400);
 }
 
 // Validate date range and show/hide warning (max 3 days)
@@ -821,6 +863,9 @@ async function clearFilters() {
   filterReviewed.value = 'all';
   filterDateWarning.style.display = 'none';
   filterApply.disabled = false;
+  searchResults = null;
+  clearTimeout(searchDebounceTimer);
+  sessionSearch.value = '';
 
   // Reset to default 50 most recent sessions
   loadingOverlay.style.display = 'flex';
@@ -857,18 +902,13 @@ function buildSessionBadgesHtml(session) {
 }
 
 function renderSessionList() {
-  // Client-side filters only: text search, reviewed, sort
-  // Server-side filters (date, tools, categories, etc.) are applied via the RPC
-  const query = sessionSearch.value.trim().toLowerCase();
+  // Client-side filters only: reviewed, sort
+  // Server-side: date, tools, categories, session_id search — applied via the RPC
   const sortBy = filterSort.value;
   const reviewedFilter = filterReviewed.value; // 'all', 'reviewed', 'unreviewed'
 
-  let filtered = allSessions;
-
-  // Text search
-  if (query) {
-    filtered = filtered.filter((s) => s.id.toLowerCase().includes(query));
-  }
+  // When a server search is active, use those results instead of allSessions
+  let filtered = searchResults !== null ? searchResults : allSessions;
 
   // Reviewed filter
   if (reviewedFilter === 'reviewed') {
@@ -1482,11 +1522,12 @@ async function handleEnvSwitch() {
 // Update the time-gate display showing the visible time window
 function updateTimeGate() {
   if (!timeGateEl) return;
-  if (allSessions.length === 0) { timeGateEl.textContent = ''; return; }
-  // Find the min earliest and max latest across loaded sessions
-  let oldest = allSessions[0].earliest;
-  let newest = allSessions[0].latest;
-  for (const s of allSessions) {
+  const source = searchResults !== null ? searchResults : allSessions;
+  if (source.length === 0) { timeGateEl.textContent = ''; return; }
+  // Find the min earliest and max latest across displayed sessions
+  let oldest = source[0].earliest;
+  let newest = source[0].latest;
+  for (const s of source) {
     if (s.earliest < oldest) oldest = s.earliest;
     if (s.latest > newest) newest = s.latest;
   }
