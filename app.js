@@ -1529,11 +1529,11 @@ function updateTimeGate() {
   if (!timeGateEl) return;
   const source = searchResults !== null ? searchResults : allSessions;
   if (source.length === 0) { timeGateEl.textContent = ''; return; }
-  // Find the min earliest and max latest across displayed sessions
-  let oldest = source[0].earliest;
+  // Use 'latest' (last activity) for both bounds — shows the period of session activity
+  let oldest = source[0].latest;
   let newest = source[0].latest;
   for (const s of source) {
-    if (s.earliest < oldest) oldest = s.earliest;
+    if (s.latest < oldest) oldest = s.latest;
     if (s.latest > newest) newest = s.latest;
   }
   const fmt = (iso) => {
