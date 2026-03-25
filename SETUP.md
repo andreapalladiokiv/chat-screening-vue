@@ -48,7 +48,7 @@ Working branch: `claude/auth-feedback-setup-Qlz0k`
 
 ### Step 4 — config.js (ME — already done)
 
-`config.js` was created from `config.example.js`. Fill in your values:
+`config.js` was created manually (see `CLAUDE.md` → Running the Application for the format). Fill in your values:
 
 ```js
 window.CHAT_VIEW_CONFIG = {
@@ -88,7 +88,7 @@ supabase functions deploy chat-feedback --no-verify-jwt
 
 ## Notes
 
-- `config.js` is gitignored. Each developer must create their own copy from `config.example.js`.
+- `config.js` is gitignored. Each developer must create their own copy (see `CLAUDE.md` for the format).
 - The Supabase project ID is the subdomain: `abcdefghij` from `abcdefghij.supabase.co`
 - The anon key is found in: Supabase Dashboard → Project Settings → API → `anon` `public`
 - After completing step 3, update the table in this file to reflect your progress.
