@@ -15,21 +15,51 @@
       --chat-bg: #e5ddd5;
       --human-bubble: #ffffff;
       --ai-bubble: #dcf8c6;
-      --system-color: #8696a0;
+      --system-color: #607080;
       --tool-bg: #fff3cd;
+      --tool-pill-text: #856404;
       --text-primary: #111b21;
-      --text-secondary: #667781;
+      --text-secondary: #556064;
       --border: #e9edef;
       --accent: #00a884;
       --accent-hover: #008f72;
       --badge-bg: #e1f0da;
       --badge-text: #3b7a28;
+      --admin-badge-bg: #fef3c7;
+      --admin-badge-text: #92400e;
       --danger: #dc3545;
+      --radius-sm: 4px;
       --radius: 8px;
+      --radius-lg: 12px;
+      --radius-full: 20px;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
       --shadow: 0 1px 3px rgba(0,0,0,0.08);
+      --shadow-md: 0 2px 8px rgba(0,0,0,0.1);
+      --shadow-lg: 0 4px 16px rgba(0,0,0,0.12);
+      --shadow-xl: 0 8px 32px rgba(0,0,0,0.15);
+      --z-sidebar: 10;
+      --z-dropdown: 100;
+      --z-overlay: 200;
+      --z-modal: 500;
     }
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    /* Accessibility: reduced motion */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+
+    /* Accessibility: focus-visible */
+    button:focus-visible, input:focus-visible, select:focus-visible,
+    textarea:focus-visible, [tabindex]:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, sans-serif;
@@ -51,8 +81,8 @@
     .login-card {
       background: #fff;
       padding: 40px;
-      border-radius: 12px;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-xl);
       width: 400px;
       max-width: 90vw;
     }
@@ -164,15 +194,15 @@
       position: fixed;
       inset: 0;
       background: rgba(0, 0, 0, 0.35);
-      z-index: 500;
+      z-index: var(--z-modal);
       display: flex;
       align-items: center;
       justify-content: center;
     }
     .admin-modal {
       background: #fff;
-      border-radius: 12px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-xl);
       width: 360px;
       max-width: 92vw;
       padding: 0;
@@ -224,7 +254,7 @@
     .admin-role-badge {
       display: inline-block;
       padding: 2px 10px;
-      border-radius: 12px;
+      border-radius: var(--radius-lg);
       font-size: 12px;
       font-weight: 600;
       background: var(--badge-bg);
@@ -232,8 +262,8 @@
       text-transform: capitalize;
     }
     .admin-role-badge.role-admin {
-      background: #fef3c7;
-      color: #92400e;
+      background: var(--admin-badge-bg);
+      color: var(--admin-badge-text);
     }
     .admin-invite-section {
       margin-top: 20px;
@@ -369,10 +399,29 @@
       background: var(--bg);
       border-left: 3px solid var(--accent);
     }
+    .session-empty-state {
+      padding: 40px 16px;
+      text-align: center;
+      color: var(--text-secondary);
+      font-size: 14px;
+    }
+    .filter-clear-link {
+      margin-top: 8px;
+      background: none;
+      border: none;
+      color: var(--accent);
+      cursor: pointer;
+      font-size: 13px;
+      text-decoration: underline;
+    }
+    .filter-clear-link:hover { color: var(--accent-hover); }
 
     .session-item .session-id {
       font-size: 14px;
       font-weight: 600;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .session-item .session-meta {
@@ -395,7 +444,7 @@
       padding: 1px 6px;
       border-radius: 10px;
     }
-    .type-pill.human { background: #eef1f4; color: #5b7083; }
+    .type-pill.human { background: #eef1f4; color: #3d5166; }
     .type-pill.ai { background: var(--badge-bg); color: var(--badge-text); }
     .type-pill.tool { background: #fff3cd; color: #856404; }
     .type-pill.system { background: #f0f2f5; color: var(--text-secondary); }
@@ -412,6 +461,20 @@
       gap: 4px;
       align-items: center;
       flex-shrink: 0;
+    }
+    .chat-header-visitor {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+      flex-wrap: wrap;
+      flex-shrink: 0;
+    }
+    .visitor-detail {
+      font-size: 11px;
+      color: var(--text-secondary);
+      padding: 2px 6px;
+      background: var(--bg);
+      border-radius: 4px;
     }
 
     /* session-count styling moved to .session-info-bar */
@@ -449,6 +512,22 @@
       font-weight: 600;
       color: var(--text-secondary);
       white-space: nowrap;
+    }
+    .filter-row-entities {
+      display: grid;
+      grid-template-columns: auto 1fr auto 1fr auto 1fr;
+      align-items: center;
+      gap: 6px;
+    }
+    .filter-row-entities > label {
+      font-size: 11px;
+    }
+    .filter-row-entities > select {
+      padding: 4px 6px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-size: 12px;
+      outline: none;
     }
     .filter-inputs {
       display: flex;
@@ -516,8 +595,8 @@
       background: #fff;
       border: 1px solid var(--border);
       border-radius: 4px;
-      z-index: 200;
-      box-shadow: 0 2px 8px rgba(0,0,0,.08);
+      z-index: var(--z-dropdown);
+      box-shadow: var(--shadow-md);
     }
     .dd-panel.open { display: block; }
     .dd-panel label {
@@ -688,6 +767,12 @@
       min-width: 0;
       flex-shrink: 1;
     }
+    .session-id-copy {
+      cursor: pointer;
+      transition: color 0.2s;
+    }
+    .session-id-copy:hover { color: var(--accent); }
+    .session-id-copy.copied { color: var(--accent); }
 
     .chat-header .meta-info {
       font-size: 13px;
@@ -790,7 +875,7 @@
       position: fixed;
       inset: 0;
       background: rgba(0,0,0,0.4);
-      z-index: 100;
+      z-index: var(--z-modal);
       align-items: center;
       justify-content: center;
     }
@@ -798,8 +883,8 @@
 
     .feedback-modal {
       background: #fff;
-      border-radius: 12px;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-xl);
       width: 440px;
       max-width: 92vw;
       max-height: 90vh;
@@ -934,7 +1019,7 @@
       display: inline-block;
       font-size: 11px;
       padding: 2px 8px;
-      border-radius: 12px;
+      border-radius: var(--radius-lg);
       background: var(--badge-bg);
       color: var(--badge-text);
       font-weight: 500;
@@ -953,6 +1038,30 @@
     .badge.reviewed-badge {
       background: #e0f2fe;
       color: #0369a1;
+    }
+    .badge.badge-project {
+      background: #e0e7ff;
+      color: #3730a3;
+    }
+    .badge.badge-visitor-type {
+      background: #fce7f3;
+      color: #9d174d;
+    }
+    .badge.badge-language {
+      background: #ecfccb;
+      color: #3f6212;
+    }
+    .badge.badge-whatsapp {
+      background: #d1fae5;
+      color: #065f46;
+    }
+    .badge.badge-validated {
+      background: #d1fae5;
+      color: #065f46;
+    }
+    .badge.badge-entity {
+      background: #f3e8ff;
+      color: #6b21a8;
     }
 
     /* Reviewed button in chat header */
@@ -1055,8 +1164,8 @@
       -webkit-backdrop-filter: blur(8px);
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
-      z-index: 350;
+      box-shadow: var(--shadow-lg);
+      z-index: var(--z-dropdown);
       overflow: hidden;
     }
     .burger-dropdown.open { display: block; }
@@ -1085,8 +1194,8 @@
       text-transform: capitalize;
     }
     .burger-user-role.role-admin {
-      background: #fef3c7;
-      color: #92400e;
+      background: var(--admin-badge-bg);
+      color: var(--admin-badge-text);
     }
 
     .burger-menu-item {
@@ -1124,7 +1233,7 @@
       position: fixed;
       inset: 0;
       background: rgba(0, 0, 0, 0.35);
-      z-index: 500;
+      z-index: var(--z-modal);
       display: none;
       align-items: center;
       justify-content: center;
@@ -1133,7 +1242,7 @@
     .users-modal {
       background: #fff;
       border-radius: 10px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+      box-shadow: var(--shadow-xl);
       width: 380px;
       max-width: 92vw;
       max-height: 80vh;
@@ -1209,8 +1318,8 @@
       text-transform: capitalize;
     }
     .users-dropdown-role.role-admin {
-      background: #fef3c7;
-      color: #92400e;
+      background: var(--admin-badge-bg);
+      color: var(--admin-badge-text);
     }
     .users-dropdown-empty {
       padding: 16px 14px;
@@ -1227,7 +1336,7 @@
 
     /* Responsive */
     @media (max-width: 768px) {
-      .sidebar { width: 100%; position: absolute; z-index: 10; }
+      .sidebar { width: 100%; position: absolute; z-index: var(--z-sidebar); }
       .sidebar.hidden { display: none; }
       .message { max-width: 85%; }
     }
@@ -1285,15 +1394,15 @@
       position: fixed;
       inset: 0;
       background: rgba(0, 0, 0, 0.45);
-      z-index: 200;
+      z-index: var(--z-overlay);
       display: flex;
       align-items: center;
       justify-content: center;
     }
     .loading-modal {
       background: #fff;
-      border-radius: 14px;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.22);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-xl);
       padding: 32px 36px;
       width: 380px;
       max-width: 92vw;
@@ -1360,7 +1469,7 @@
     <div class="sidebar" id="sidebar">
       <div class="sidebar-header">
         <div style="display:flex;align-items:center;gap:8px;position:relative;">
-          <button class="burger-btn" id="burger-btn" title="Menu">&#9776;</button>
+          <button class="burger-btn" id="burger-btn" title="Menu" aria-label="User menu">&#9776;</button>
           <div class="burger-dropdown" id="burger-dropdown">
             <div class="burger-user-info">
               <div class="burger-user-email" id="burger-user-email"></div>
@@ -1427,6 +1536,63 @@
           </div>
         </div>
         <div class="filter-row">
+          <label>Project</label>
+          <div class="dd-filter" id="filter-project-wrap">
+            <button class="dd-trigger" id="filter-project-trigger">All projects</button>
+            <div class="dd-panel" id="filter-project-panel"></div>
+          </div>
+        </div>
+        <div class="filter-row">
+          <label>Visitor type</label>
+          <div class="dd-filter" id="filter-visitor-type-wrap">
+            <button class="dd-trigger" id="filter-visitor-type-trigger">All visitor types</button>
+            <div class="dd-panel" id="filter-visitor-type-panel"></div>
+          </div>
+        </div>
+        <div class="filter-row">
+          <label>Language</label>
+          <div class="dd-filter" id="filter-language-wrap">
+            <button class="dd-trigger" id="filter-language-trigger">All languages</button>
+            <div class="dd-panel" id="filter-language-panel"></div>
+          </div>
+        </div>
+        <div class="filter-row">
+          <label>Validated</label>
+          <select id="filter-validation">
+            <option value="">All</option>
+            <option value="true">Yes</option>
+            <option value="false">No</option>
+          </select>
+        </div>
+        <div class="filter-row">
+          <label>WhatsApp</label>
+          <select id="filter-whatsapp">
+            <option value="">All</option>
+            <option value="true">Yes</option>
+            <option value="false">No</option>
+          </select>
+        </div>
+        <div class="filter-row filter-row-entities">
+          <label>Has lead</label>
+          <select id="filter-has-lead">
+            <option value="">All</option>
+            <option value="true">Yes</option>
+            <option value="false">No</option>
+          </select>
+          <label>Has case</label>
+          <select id="filter-has-case">
+            <option value="">All</option>
+            <option value="true">Yes</option>
+            <option value="false">No</option>
+          </select>
+          <label>Has booking</label>
+          <select id="filter-has-booking">
+            <option value="">All</option>
+            <option value="true">Yes</option>
+            <option value="false">No</option>
+          </select>
+        </div>
+        <div class="filter-row">
           <label>Sort by</label>
           <select id="filter-sort">
             <option value="newest">Newest first</option>
@@ -1450,7 +1616,7 @@
         </div>
       </div>
       <div class="session-info-bar">
-        <span class="session-count" id="session-count"></span>
+        <span class="session-count" id="session-count" aria-live="polite"></span>
         <span class="time-gate" id="time-gate"></span>
       </div>
       <ul class="session-list" id="session-list"></ul>
@@ -1461,7 +1627,7 @@
       <div class="chat-header" id="chat-header-bar">
         <div class="chat-session-controls" id="chat-session-controls"></div>
         <div class="chat-header-right">
-          <button class="disconnect-btn" id="refresh-btn">Refresh</button>
+          <button class="disconnect-btn" id="refresh-btn" aria-label="Refresh sessions">Refresh</button>
         </div>
       </div>
       <div class="chat-main" id="chat-main">
@@ -1473,9 +1639,9 @@
   </div>
 
   <!-- Feedback Modal -->
-  <div class="feedback-overlay" id="feedback-overlay">
+  <div class="feedback-overlay" id="feedback-overlay" role="dialog" aria-modal="true" aria-labelledby="fb-modal-title">
     <div class="feedback-modal">
-      <h3>Leave Feedback</h3>
+      <h3 id="fb-modal-title">Leave Feedback</h3>
       <div class="fb-subtitle" id="fb-subtitle">About this chat session</div>
       <div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;">Submitted by: <strong id="fb-user-name"></strong></div>
       <label for="fb-category">Category</label>
@@ -1497,10 +1663,10 @@
   </div>
 
   <!-- Users Modal -->
-  <div id="users-modal-overlay" class="users-modal-overlay">
+  <div id="users-modal-overlay" class="users-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="users-modal-title">
     <div class="users-modal">
       <div class="users-modal-header">
-        <h3>Platform Users</h3>
+        <h3 id="users-modal-title">Platform Users</h3>
         <button id="users-modal-close" class="users-modal-close" title="Close">&#10005;</button>
       </div>
       <div class="users-modal-body" id="users-modal-body"></div>
@@ -1508,10 +1674,10 @@
   </div>
 
   <!-- Admin Settings Modal -->
-  <div id="admin-modal-overlay" class="admin-modal-overlay" style="display:none">
+  <div id="admin-modal-overlay" class="admin-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="admin-modal-title" style="display:none">
     <div class="admin-modal">
       <div class="admin-modal-header">
-        <h3>Settings</h3>
+        <h3 id="admin-modal-title">Settings</h3>
         <button id="admin-modal-close" class="admin-modal-close" title="Close">✕</button>
       </div>
       <div class="admin-modal-body">
@@ -1554,7 +1720,7 @@
   </script>
   <!-- config.js is gitignored; its absence is fine — the app falls back to manual entry -->
   <script src="config.js" onerror="console.info('config.js not found — using manual credential entry.');"></script>
-  <script src="app.js?v=42"
+  <script src="app.js?v=43"
           onerror="document.getElementById('login-error').style.display='block'; document.getElementById('login-error').textContent='Failed to load app.js.';">
   </script>
 </body>

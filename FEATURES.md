@@ -110,15 +110,38 @@ Update this file whenever a feature is added, changed, or completed.
 - [x] Modal closes automatically 1.5s after successful submission
 - [x] Click outside modal to cancel
 
+### Visitor Settings Integration
+- [x] **Session enrichment** — `get_session_list` LEFT JOINs `visitors_settings` (via `session_id`) to enrich sessions with project, visitor type, language, validation, WhatsApp channel, lead/case/booking presence, request ID, and masked phone
+- [x] **Visitor badges in session list** — project (indigo), visitor type (pink), language (lime), WhatsApp (teal), validated (teal), lead/case/booking entity (purple)
+- [x] **Visitor info in chat header** — project, type, language, WhatsApp, validation, lead/case/booking, phone, request ID shown as badges when session is selected
+- [x] **Visitor settings filters** — server-side filters for project, visitor type, language (multi-select dropdown checklists, OR logic), validation, WhatsApp (boolean select), has lead/case/booking (boolean select)
+- [x] **Filter options populated from `get_filter_options`** — projects, visitor types, languages scoped to last 7 days
+
 ### UI / UX
 - [x] WhatsApp-inspired design with CSS custom properties for theming
+- [x] CSS design tokens: shadow scale (`--shadow-sm` to `--shadow-xl`), radius scale (`--radius-sm` to `--radius-full`), z-index layers (`--z-sidebar` to `--z-modal`)
 - [x] Responsive layout: sidebar overlays at ≤768px
 - [x] Collapsible tool call / tool result details (`<details>` element)
-- [x] Cache-busting query param on `app.js` (`?v=42`) — increment when deploying
+- [x] Cache-busting query param on `app.js` (`?v=43`) — increment when deploying
 - [x] Loading overlay during session load and filter apply
 - [x] "Searching..." indicator in session list during server-side search
+- [x] **Empty states** — "No sessions found" or "No sessions match your filters" with Clear Filters action link
+- [x] **Copy session ID** — click session ID in chat header to copy to clipboard; visual "Copied!" feedback
+- [x] **Shareable session URLs** — `?session=<id>` URL param; auto-selects session on load; updated via `history.replaceState`
+- [x] **Session ID overflow** — long session IDs truncated with ellipsis in sidebar
 - [x] Global JS error handler shows errors in the browser console
 - [x] CDN load error handler for Supabase library (error shown in `#login-error`)
+
+### Accessibility (WCAG AA)
+- [x] **Color contrast** — `--text-secondary` and `--system-color` darkened for AA compliance; `.type-pill.human` text darkened
+- [x] **Focus-visible states** — all buttons, inputs, selects, and tabbable elements show `outline: 2px solid var(--accent)` on keyboard focus
+- [x] **Reduced motion** — `prefers-reduced-motion` media query disables all animations and transitions
+- [x] **ARIA attributes** — `role="dialog"`, `aria-modal="true"`, `aria-labelledby` on all modals; `aria-label` on burger menu, refresh button; `aria-live="polite"` on session count
+- [x] **Keyboard navigation** — Escape closes all modals and dropdowns; arrow keys navigate session list; session items are tabbable (`tabIndex=0`)
+
+### Performance
+- [x] **DocumentFragment rendering** — session list built via `DocumentFragment` for single DOM append instead of N individual mutations
+- [x] **Tabbable session items** — `tabIndex=0` + `data-session-id` on each `<li>` for keyboard navigation
 
 ---
 
@@ -128,9 +151,8 @@ Update this file whenever a feature is added, changed, or completed.
 - [ ] **Configurable timezone** — currently hardcoded to `Europe/Chisinau`; let user pick from a dropdown or detect from browser (`Intl.DateTimeFormat().resolvedOptions().timeZone`)
 - [ ] **Filter by verified / end-conversation flags** — two boolean session properties visible as badges but not yet exposed as filter options
 
-### Medium Priority
-- [ ] **Keyboard navigation** — arrow keys to move between sessions in the list; Escape to close feedback modal
-
 ### Low Priority / Nice to Have
 - [ ] **Export** — download a session's messages as JSON or plain text
 - [ ] **Session notes** — let users add a private text note to a session, stored in localStorage alongside reviewed state
+- [ ] **Dark mode** — CSS variables are dark-mode ready; add `prefers-color-scheme: dark` media query or toggle
+- [ ] **Event delegation for message feedback buttons** — replace per-message listeners with single delegated listener on `#chat-main`

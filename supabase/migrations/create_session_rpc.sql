@@ -20,8 +20,9 @@ EXCEPTION WHEN OTHERS THEN
 END;
 $$;
 
--- Drop old signature so CREATE OR REPLACE works with the new parameter list
+-- Drop old signatures so CREATE OR REPLACE works with the new parameter list
 DROP FUNCTION IF EXISTS get_session_list(int, text, text, text, int, int, text[], text[], text[]);
+DROP FUNCTION IF EXISTS get_session_list(int, text, text, text, int, int, text[], text[], text[], text);
 
 -- ── RPC: get_session_list ───────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION get_session_list(
@@ -34,7 +35,16 @@ CREATE OR REPLACE FUNCTION get_session_list(
   p_tools         text[]   DEFAULT NULL,
   p_categories    text[]   DEFAULT NULL,
   p_request_types text[]   DEFAULT NULL,
-  p_session_id    text     DEFAULT NULL    -- substring search on session_id (searches ALL data)
+  p_session_id    text     DEFAULT NULL,   -- substring search on session_id (searches ALL data)
+  -- Visitor settings filters
+  p_projects      text[]   DEFAULT NULL,   -- OR filter: session matches any selected project
+  p_visitor_types text[]   DEFAULT NULL,   -- OR filter: session matches any selected visitor type
+  p_languages     text[]   DEFAULT NULL,   -- OR filter: session matches any selected language
+  p_validation    boolean  DEFAULT NULL,   -- exact match filter
+  p_is_whatsapp   boolean  DEFAULT NULL,   -- exact match filter
+  p_has_lead      boolean  DEFAULT NULL,   -- true = lead_id IS NOT NULL
+  p_has_case      boolean  DEFAULT NULL,   -- true = case_id IS NOT NULL
+  p_has_booking   boolean  DEFAULT NULL    -- true = booking_identifier IS NOT NULL
 )
 RETURNS jsonb
 LANGUAGE plpgsql STABLE
@@ -44,6 +54,9 @@ DECLARE
   v_date_from timestamptz := CASE WHEN p_date_from IS NOT NULL THEN p_date_from::timestamptz ELSE NULL END;
   v_date_to   timestamptz := CASE WHEN p_date_to   IS NOT NULL THEN p_date_to::timestamptz   ELSE NULL END;
   v_has_meta_filters boolean := (p_tools IS NOT NULL OR p_categories IS NOT NULL OR p_request_types IS NOT NULL);
+  v_has_vs_filters boolean := (p_projects IS NOT NULL OR p_visitor_types IS NOT NULL OR p_languages IS NOT NULL
+                               OR p_validation IS NOT NULL OR p_is_whatsapp IS NOT NULL
+                               OR p_has_lead IS NOT NULL OR p_has_case IS NOT NULL OR p_has_booking IS NOT NULL);
   v_session_ids text[];
   result jsonb;
 BEGIN
@@ -52,8 +65,8 @@ BEGIN
   -- STAGE 1: Find candidate session IDs
   -- ═══════════════════════════════════════════════════════════════════════════
 
-  IF NOT v_has_meta_filters THEN
-    -- FAST PATH: No metadata filters needed.
+  IF NOT v_has_meta_filters AND NOT v_has_vs_filters THEN
+    -- FAST PATH: No metadata or visitor-settings filters needed.
     -- Simple GROUP BY uses the session_id index — no JSONB parsing.
     SELECT array_agg(sub.session_id) INTO v_session_ids
     FROM (
@@ -71,7 +84,7 @@ BEGIN
     ) sub;
 
   ELSE
-    -- FILTERED PATH: Metadata filters require JSONB parsing.
+    -- FILTERED PATH: Metadata or visitor-settings filters require extra joins.
     -- Frontend enforces max 3-day date range. Default to 7 days as safety net.
     IF v_date_from IS NULL AND v_date_to IS NULL THEN
       v_date_from := NOW() - INTERVAL '7 days';
@@ -136,12 +149,22 @@ BEGIN
       FROM session_stats ss
       LEFT JOIN session_tools_agg sta ON ss.session_id = sta.session_id
       LEFT JOIN session_ai_agg   saa ON ss.session_id = saa.session_id
+      LEFT JOIN visitors_settings vs  ON ss.session_id = vs.session_id
       WHERE (v_cursor    IS NULL OR ss.latest < v_cursor)
         AND (p_msg_min   IS NULL OR ss.msg_count >= p_msg_min)
         AND (p_msg_max   IS NULL OR ss.msg_count <= p_msg_max)
         AND (p_tools     IS NULL OR COALESCE(sta.tools, ARRAY[]::text[]) @> p_tools)
         AND (p_categories    IS NULL OR COALESCE(saa.categories, ARRAY[]::text[]) && p_categories)
         AND (p_request_types IS NULL OR COALESCE(saa.request_types, ARRAY[]::text[]) && p_request_types)
+        -- Visitor settings filters
+        AND (p_projects      IS NULL OR vs.project     = ANY(p_projects))
+        AND (p_visitor_types IS NULL OR vs.type         = ANY(p_visitor_types))
+        AND (p_languages     IS NULL OR vs.language     = ANY(p_languages))
+        AND (p_validation    IS NULL OR COALESCE(vs.validation, false) = p_validation)
+        AND (p_is_whatsapp   IS NULL OR COALESCE(vs.is_whatsapp, false) = p_is_whatsapp)
+        AND (p_has_lead    IS NULL OR (p_has_lead    AND vs.lead_id              IS NOT NULL) OR (NOT p_has_lead    AND (vs.lead_id              IS NULL OR vs.session_id IS NULL)))
+        AND (p_has_case    IS NULL OR (p_has_case    AND vs.case_id              IS NOT NULL) OR (NOT p_has_case    AND (vs.case_id              IS NULL OR vs.session_id IS NULL)))
+        AND (p_has_booking IS NULL OR (p_has_booking AND vs.booking_identifier   IS NOT NULL) OR (NOT p_has_booking AND (vs.booking_identifier   IS NULL OR vs.session_id IS NULL)))
       ORDER BY ss.latest DESC
       LIMIT p_limit
     )
@@ -157,6 +180,7 @@ BEGIN
   -- ═══════════════════════════════════════════════════════════════════════════
   -- STAGE 2: Extract full metadata for candidate sessions only.
   -- Scoped to a small number of sessions, so JSONB parsing is fast.
+  -- Also joins visitors_settings for enrichment data.
   -- ═══════════════════════════════════════════════════════════════════════════
   WITH
   scoped AS (
@@ -223,6 +247,17 @@ BEGIN
            bool_or(end_conversation)   AS has_end_conversation
     FROM ai_meta GROUP BY session_id
   ),
+  vs AS (
+    SELECT session_id, project, type AS visitor_type, language,
+           COALESCE(validation, false) AS validation,
+           COALESCE(is_whatsapp, false) AS is_whatsapp,
+           lead_id IS NOT NULL          AS has_lead,
+           case_id IS NOT NULL          AS has_case,
+           booking_identifier IS NOT NULL AS has_booking,
+           request_id, masked_client_phone
+    FROM   visitors_settings
+    WHERE  session_id = ANY(v_session_ids)
+  ),
   combined AS (
     SELECT
       ss.session_id, ss.msg_count, ss.latest, ss.earliest, ss.type_counts,
@@ -230,10 +265,17 @@ BEGIN
       COALESCE(saa.categories,    ARRAY[]::text[]) AS categories,
       COALESCE(saa.request_types, ARRAY[]::text[]) AS request_types,
       COALESCE(saa.has_verified,       false)      AS has_verified,
-      COALESCE(saa.has_end_conversation, false)    AS has_end_conversation
+      COALESCE(saa.has_end_conversation, false)    AS has_end_conversation,
+      -- Visitor settings enrichment
+      vs.project, vs.visitor_type, vs.language, vs.validation, vs.is_whatsapp,
+      COALESCE(vs.has_lead, false)    AS has_lead,
+      COALESCE(vs.has_case, false)    AS has_case,
+      COALESCE(vs.has_booking, false) AS has_booking,
+      vs.request_id, vs.masked_client_phone
     FROM session_stats ss
     LEFT JOIN session_tools_agg sta ON ss.session_id = sta.session_id
     LEFT JOIN session_ai_agg   saa ON ss.session_id = saa.session_id
+    LEFT JOIN vs                    ON ss.session_id = vs.session_id
   )
   SELECT jsonb_agg(to_jsonb(c) ORDER BY c.latest DESC)
   INTO   result
@@ -305,11 +347,33 @@ BEGIN
              OR jsonb_array_length(cm.message->'tool_calls') = 0)
     ) sub
     WHERE parsed->>'request_type' IS NOT NULL
+  ),
+  -- Visitor settings filter options (scoped to sessions active in the last 7 days)
+  vs_recent AS (
+    SELECT DISTINCT session_id FROM chat_messages WHERE created_at >= v_since
+  ),
+  vs_projects AS (
+    SELECT DISTINCT vs.project AS name FROM visitors_settings vs
+    INNER JOIN vs_recent r ON vs.session_id = r.session_id
+    WHERE vs.project IS NOT NULL
+  ),
+  vs_visitor_types AS (
+    SELECT DISTINCT vs.type AS name FROM visitors_settings vs
+    INNER JOIN vs_recent r ON vs.session_id = r.session_id
+    WHERE vs.type IS NOT NULL
+  ),
+  vs_languages AS (
+    SELECT DISTINCT vs.language AS name FROM visitors_settings vs
+    INNER JOIN vs_recent r ON vs.session_id = r.session_id
+    WHERE vs.language IS NOT NULL
   )
   SELECT jsonb_build_object(
     'tools',         COALESCE((SELECT jsonb_agg(name ORDER BY name) FROM tool_names),         '[]'::jsonb),
     'categories',    COALESCE((SELECT jsonb_agg(name ORDER BY name) FROM category_names),     '[]'::jsonb),
-    'request_types', COALESCE((SELECT jsonb_agg(name ORDER BY name) FROM request_type_names), '[]'::jsonb)
+    'request_types', COALESCE((SELECT jsonb_agg(name ORDER BY name) FROM request_type_names), '[]'::jsonb),
+    'projects',      COALESCE((SELECT jsonb_agg(name ORDER BY name) FROM vs_projects),        '[]'::jsonb),
+    'visitor_types', COALESCE((SELECT jsonb_agg(name ORDER BY name) FROM vs_visitor_types),   '[]'::jsonb),
+    'languages',     COALESCE((SELECT jsonb_agg(name ORDER BY name) FROM vs_languages),       '[]'::jsonb)
   ) INTO result;
 
   RETURN result;
@@ -318,5 +382,5 @@ $$;
 
 -- ── Permissions ──────────────────────────────────────────────────────────────
 GRANT EXECUTE ON FUNCTION safe_jsonb(text) TO anon, authenticated;
-GRANT EXECUTE ON FUNCTION get_session_list(int, text, text, text, int, int, text[], text[], text[], text) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION get_session_list(int, text, text, text, int, int, text[], text[], text[], text, text[], text[], text[], boolean, boolean, boolean, boolean, boolean) TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION get_filter_options() TO anon, authenticated;

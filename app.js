@@ -4,6 +4,9 @@ let allSessions = [];
 let allToolNames = []; // unique tool names across all sessions
 let allCategories = []; // unique request categories
 let allRequestTypes = []; // unique request types
+let allProjects = []; // unique visitor project names
+let allVisitorTypes = []; // unique visitor types
+let allLanguages = []; // unique visitor languages
 let currentSessionId = null;
 let realtimeChannel = null;
 let environments = []; // parsed from window.CHAT_VIEW_CONFIG
@@ -44,6 +47,17 @@ const filterCategoryTrigger = document.getElementById('filter-category-trigger')
 const filterCategoryPanel = document.getElementById('filter-category-panel');
 const filterRequestTypeTrigger = document.getElementById('filter-request-type-trigger');
 const filterRequestTypePanel = document.getElementById('filter-request-type-panel');
+const filterProjectTrigger = document.getElementById('filter-project-trigger');
+const filterProjectPanel = document.getElementById('filter-project-panel');
+const filterVisitorTypeTrigger = document.getElementById('filter-visitor-type-trigger');
+const filterVisitorTypePanel = document.getElementById('filter-visitor-type-panel');
+const filterLanguageTrigger = document.getElementById('filter-language-trigger');
+const filterLanguagePanel = document.getElementById('filter-language-panel');
+const filterValidation = document.getElementById('filter-validation');
+const filterWhatsapp = document.getElementById('filter-whatsapp');
+const filterHasLead = document.getElementById('filter-has-lead');
+const filterHasCase = document.getElementById('filter-has-case');
+const filterHasBooking = document.getElementById('filter-has-booking');
 const filterReviewed = document.getElementById('filter-reviewed');
 const filterClear = document.getElementById('filter-clear');
 const filterApply = document.getElementById('filter-apply');
@@ -167,6 +181,29 @@ console.log('[app.js] Script loaded. Supabase available:', !!(window.supabase &&
 
   // Infinite scroll on session list
   sessionList.addEventListener('scroll', handleSessionListScroll);
+
+  // Keyboard navigation: Escape closes modals/dropdowns, arrows navigate sessions
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      closeFeedbackModal();
+      closeAdminModal();
+      closeUsersModal();
+      closeAllDropdowns();
+      burgerDropdown.classList.remove('open');
+      return;
+    }
+    // Arrow keys for session list navigation (only when sidebar is visible)
+    if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && document.activeElement?.closest('#session-list')) {
+      e.preventDefault();
+      const items = Array.from(sessionList.querySelectorAll('.session-item'));
+      const activeIdx = items.findIndex(li => li.classList.contains('active'));
+      let nextIdx = e.key === 'ArrowDown' ? activeIdx + 1 : activeIdx - 1;
+      if (nextIdx >= 0 && nextIdx < items.length) {
+        items[nextIdx].focus();
+        items[nextIdx].click();
+      }
+    }
+  });
 
   // ── Build environments list from config ──
   const cfg = window.CHAT_VIEW_CONFIG || {};
@@ -423,6 +460,11 @@ async function handleRefresh() {
       populateFilters();
       renderSessionList();
       updateTimeGate();
+      // Auto-select session from URL ?session=<id> (shareable links)
+      const urlSession = new URL(window.location).searchParams.get('session');
+      if (urlSession && allSessions.some(s => s.id === urlSession)) {
+        selectSession(urlSession);
+      }
     } else {
       sessionCount.textContent = 'No sessions found.';
     }
@@ -510,10 +552,16 @@ function repopulateFiltersPreservingSelection() {
   const selTools = getCheckedValues(filterToolsPanel);
   const selCats  = getCheckedValues(filterCategoryPanel);
   const selTypes = getCheckedValues(filterRequestTypePanel);
+  const selProjects = getCheckedValues(filterProjectPanel);
+  const selVisitorTypes = getCheckedValues(filterVisitorTypePanel);
+  const selLanguages = getCheckedValues(filterLanguagePanel);
   populateFilters();
   restoreChecked(filterToolsPanel, filterToolsTrigger, selTools, 'All tools', 'Tools');
   restoreChecked(filterCategoryPanel, filterCategoryTrigger, selCats, 'All categories', 'Category');
   restoreChecked(filterRequestTypePanel, filterRequestTypeTrigger, selTypes, 'All types', 'Type');
+  restoreChecked(filterProjectPanel, filterProjectTrigger, selProjects, 'All projects', 'Project');
+  restoreChecked(filterVisitorTypePanel, filterVisitorTypeTrigger, selVisitorTypes, 'All visitor types', 'Visitor type');
+  restoreChecked(filterLanguagePanel, filterLanguageTrigger, selLanguages, 'All languages', 'Language');
 }
 
 function getCheckedValues(panel) {
@@ -574,6 +622,9 @@ async function loadFilterOptions() {
       allToolNames = (data.tools || []).sort();
       allCategories = (data.categories || []).sort();
       allRequestTypes = (data.request_types || []).sort();
+      allProjects = (data.projects || []).sort();
+      allVisitorTypes = (data.visitor_types || []).sort();
+      allLanguages = (data.languages || []).sort();
     }
   } catch (err) {
     console.warn('[filters] loadFilterOptions skipped:', err.message);
@@ -593,6 +644,17 @@ function parseSessionResults(rows) {
     requestTypes: row.request_types || [],
     hasVerified: row.has_verified || false,
     hasEndConversation: row.has_end_conversation || false,
+    // Visitor settings enrichment
+    project: row.project || null,
+    visitorType: row.visitor_type || null,
+    language: row.language || null,
+    validation: row.validation || false,
+    isWhatsapp: row.is_whatsapp || false,
+    hasLead: row.has_lead || false,
+    hasCase: row.has_case || false,
+    hasBooking: row.has_booking || false,
+    requestId: row.request_id || null,
+    maskedClientPhone: row.masked_client_phone || null,
   }));
 }
 
@@ -747,10 +809,20 @@ async function applyFilters() {
   const selectedTools = getCheckedValues(filterToolsPanel);
   const selectedCategories = getCheckedValues(filterCategoryPanel);
   const selectedReqTypes = getCheckedValues(filterRequestTypePanel);
+  const selectedProjects = getCheckedValues(filterProjectPanel);
+  const selectedVisitorTypes = getCheckedValues(filterVisitorTypePanel);
+  const selectedLanguages = getCheckedValues(filterLanguagePanel);
+  const validationVal = filterValidation.value;
+  const whatsappVal = filterWhatsapp.value;
+  const hasLeadVal = filterHasLead.value;
+  const hasCaseVal = filterHasCase.value;
+  const hasBookingVal = filterHasBooking.value;
 
   // If no server-side filters specified, fall back to default load
   const hasServerFilters = dateFrom || dateTo || msgMin !== null || msgMax !== null
-    || selectedTools.length > 0 || selectedCategories.length > 0 || selectedReqTypes.length > 0;
+    || selectedTools.length > 0 || selectedCategories.length > 0 || selectedReqTypes.length > 0
+    || selectedProjects.length > 0 || selectedVisitorTypes.length > 0 || selectedLanguages.length > 0
+    || validationVal || whatsappVal || hasLeadVal || hasCaseVal || hasBookingVal;
 
   if (!hasServerFilters) {
     // No server filters — reload default sessions
@@ -783,6 +855,14 @@ async function applyFilters() {
   if (selectedTools.length > 0) params.p_tools = selectedTools;
   if (selectedCategories.length > 0) params.p_categories = selectedCategories;
   if (selectedReqTypes.length > 0) params.p_request_types = selectedReqTypes;
+  if (selectedProjects.length > 0) params.p_projects = selectedProjects;
+  if (selectedVisitorTypes.length > 0) params.p_visitor_types = selectedVisitorTypes;
+  if (selectedLanguages.length > 0) params.p_languages = selectedLanguages;
+  if (validationVal) params.p_validation = validationVal === 'true';
+  if (whatsappVal) params.p_is_whatsapp = whatsappVal === 'true';
+  if (hasLeadVal) params.p_has_lead = hasLeadVal === 'true';
+  if (hasCaseVal) params.p_has_case = hasCaseVal === 'true';
+  if (hasBookingVal) params.p_has_booking = hasBookingVal === 'true';
 
   filtersApplied = true;
   // Store filter params (without p_limit / p_cursor) for loadMore
@@ -820,6 +900,9 @@ function populateFilters() {
   buildDropdown(filterToolsPanel, filterToolsTrigger, allToolNames, 'All tools', 'Tools');
   buildDropdown(filterCategoryPanel, filterCategoryTrigger, allCategories, 'All categories', 'Category');
   buildDropdown(filterRequestTypePanel, filterRequestTypeTrigger, allRequestTypes, 'All types', 'Type');
+  buildDropdown(filterProjectPanel, filterProjectTrigger, allProjects, 'All projects', 'Project');
+  buildDropdown(filterVisitorTypePanel, filterVisitorTypeTrigger, allVisitorTypes, 'All visitor types', 'Visitor type');
+  buildDropdown(filterLanguagePanel, filterLanguageTrigger, allLanguages, 'All languages', 'Language');
 }
 
 function buildDropdown(panel, trigger, items, defaultLabel, activePrefix) {
@@ -864,6 +947,17 @@ async function clearFilters() {
   filterCategoryTrigger.textContent = 'All categories';
   for (const cb of filterRequestTypePanel.querySelectorAll('input[type=checkbox]')) cb.checked = false;
   filterRequestTypeTrigger.textContent = 'All types';
+  for (const cb of filterProjectPanel.querySelectorAll('input[type=checkbox]')) cb.checked = false;
+  filterProjectTrigger.textContent = 'All projects';
+  for (const cb of filterVisitorTypePanel.querySelectorAll('input[type=checkbox]')) cb.checked = false;
+  filterVisitorTypeTrigger.textContent = 'All visitor types';
+  for (const cb of filterLanguagePanel.querySelectorAll('input[type=checkbox]')) cb.checked = false;
+  filterLanguageTrigger.textContent = 'All languages';
+  filterValidation.value = '';
+  filterWhatsapp.value = '';
+  filterHasLead.value = '';
+  filterHasCase.value = '';
+  filterHasBooking.value = '';
   filterSort.value = 'newest';
   filterReviewed.value = 'all';
   filterDateWarning.style.display = 'none';
@@ -890,11 +984,48 @@ function buildTypePillsHtml(tc) {
   return parts.join('');
 }
 
+function buildVisitorInfoHtml(session) {
+  if (!session) return '';
+  const parts = [];
+  if (session.project) parts.push(`<span class="badge badge-project">${escapeHtml(session.project)}</span>`);
+  if (session.visitorType) parts.push(`<span class="badge badge-visitor-type">${escapeHtml(session.visitorType)}</span>`);
+  if (session.language) parts.push(`<span class="badge badge-language">${escapeHtml(session.language)}</span>`);
+  if (session.isWhatsapp) parts.push('<span class="badge badge-whatsapp">WhatsApp</span>');
+  if (session.validation) parts.push('<span class="badge badge-validated">validated</span>');
+  if (session.hasLead) parts.push('<span class="badge badge-entity">lead</span>');
+  if (session.hasCase) parts.push('<span class="badge badge-entity">case</span>');
+  if (session.hasBooking) parts.push('<span class="badge badge-entity">booking</span>');
+  if (session.maskedClientPhone) parts.push(`<span class="visitor-detail">${escapeHtml(session.maskedClientPhone)}</span>`);
+  if (session.requestId) parts.push(`<span class="visitor-detail">${escapeHtml(session.requestId)}</span>`);
+  return parts.length ? `<div class="chat-header-visitor">${parts.join('')}</div>` : '';
+}
+
 function buildSessionBadgesHtml(session) {
   const badges = [];
   if (reviewedSessions.has(session.id)) {
     badges.push('<span class="badge reviewed-badge">reviewed</span>');
   }
+  // Visitor settings badges (prominent)
+  if (session.project) {
+    badges.push(`<span class="badge badge-project">${escapeHtml(session.project)}</span>`);
+  }
+  if (session.visitorType) {
+    badges.push(`<span class="badge badge-visitor-type">${escapeHtml(session.visitorType)}</span>`);
+  }
+  if (session.language) {
+    badges.push(`<span class="badge badge-language">${escapeHtml(session.language)}</span>`);
+  }
+  if (session.isWhatsapp) {
+    badges.push('<span class="badge badge-whatsapp">WhatsApp</span>');
+  }
+  if (session.validation) {
+    badges.push('<span class="badge badge-validated">validated</span>');
+  }
+  // Entity presence indicators
+  if (session.hasLead) badges.push('<span class="badge badge-entity">lead</span>');
+  if (session.hasCase) badges.push('<span class="badge badge-entity">case</span>');
+  if (session.hasBooking) badges.push('<span class="badge badge-entity">booking</span>');
+  // AI metadata badges
   for (const cat of session.categories) {
     badges.push(`<span class="badge">${escapeHtml(cat)}</span>`);
   }
@@ -942,9 +1073,27 @@ function renderSessionList() {
   sessionCount.textContent = `${filtered.length} session${filtered.length !== 1 ? 's' : ''}${label}${noMoreSessions ? '' : '+'}`;
 
   sessionList.innerHTML = '';
+
+  if (filtered.length === 0) {
+    const empty = document.createElement('li');
+    empty.className = 'session-empty-state';
+    empty.innerHTML = filtersApplied
+      ? '<div>No sessions match your filters</div><button class="filter-clear-link" id="empty-clear-filters">Clear Filters</button>'
+      : '<div>No sessions found</div>';
+    sessionList.appendChild(empty);
+    if (filtersApplied) {
+      const clearBtn = empty.querySelector('#empty-clear-filters');
+      if (clearBtn) clearBtn.addEventListener('click', clearFilters);
+    }
+    return;
+  }
+
+  const frag = document.createDocumentFragment();
   for (const session of filtered) {
     const li = document.createElement('li');
     li.className = 'session-item' + (session.id === currentSessionId ? ' active' : '');
+    li.tabIndex = 0;
+    li.dataset.sessionId = session.id;
     const tc = session.typeCounts;
     const typePills = buildTypePillsHtml(tc);
     const badgesHtml = buildSessionBadgesHtml(session);
@@ -955,12 +1104,17 @@ function renderSessionList() {
       ${badgesHtml}
     `;
     li.addEventListener('click', () => selectSession(session.id));
-    sessionList.appendChild(li);
+    frag.appendChild(li);
   }
+  sessionList.appendChild(frag);
 }
 
 async function selectSession(sessionId) {
   currentSessionId = sessionId;
+  // Update URL for sharing (without triggering navigation)
+  const url = new URL(window.location);
+  url.searchParams.set('session', sessionId);
+  history.replaceState(null, '', url);
   renderSessionList(); // Update active highlight
 
   // Show loading state
@@ -1114,12 +1268,15 @@ function renderMessages(rows, sessionId) {
   // Chat header — update permanent session controls bar
   const isReviewed = reviewedSessions.has(sessionId);
   const sessionControls = document.getElementById('chat-session-controls');
+  const session = allSessions.find((s) => s.id === sessionId);
+  const visitorInfoHtml = buildVisitorInfoHtml(session);
   sessionControls.innerHTML = `
     <button class="chat-reviewed-btn${isReviewed ? ' reviewed-active' : ''}" id="chat-reviewed-btn">${isReviewed ? 'Reviewed ✓' : 'Mark Reviewed'}</button>
     <button class="chat-feedback-btn" id="chat-feedback-btn">Feedback</button>
-    <h3>${escapeHtml(sessionId)}</h3>
+    <h3 class="session-id-copy" title="Click to copy session ID">${escapeHtml(sessionId)}</h3>
     <span class="meta-info">${rows.length} messages</span>
     <div class="chat-header-counts">${buildTypePillsHtml(headerCounts)}</div>
+    ${visitorInfoHtml}
   `;
 
   sessionControls.querySelector('#chat-reviewed-btn').addEventListener('click', () => toggleReviewed(sessionId));
@@ -1127,6 +1284,19 @@ function renderMessages(rows, sessionId) {
   sessionControls.querySelector('#chat-feedback-btn').addEventListener('click', () => {
     openFeedbackModal('chat', { session_id: sessionId, message_count: rows.length });
   });
+
+  // Copy session ID to clipboard on click
+  const sessionIdEl = sessionControls.querySelector('.session-id-copy');
+  if (sessionIdEl) {
+    sessionIdEl.addEventListener('click', () => {
+      navigator.clipboard.writeText(sessionId).then(() => {
+        const original = sessionIdEl.title;
+        sessionIdEl.title = 'Copied!';
+        sessionIdEl.classList.add('copied');
+        setTimeout(() => { sessionIdEl.title = original; sessionIdEl.classList.remove('copied'); }, 1500);
+      });
+    });
+  }
 
   // Messages container
   const container = document.createElement('div');

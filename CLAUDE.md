@@ -31,10 +31,12 @@ chat-view/
     │   ├── add_submitted_by_to_chat_feedback.sql  # Adds submitted_by column
     │   ├── create_user_roles.sql           # DB schema + RLS + trigger for user roles
     │   ├── first_user_admin_role.sql       # Override: first user gets admin role
-    │   ├── create_session_rpc.sql          # RPCs: get_session_list, get_filter_options (two-stage architecture)
-    │   └── create_session_indexes.sql      # Performance indexes (run separately, CONCURRENTLY)
+    │   ├── create_session_rpc.sql          # RPCs: get_session_list, get_filter_options (two-stage architecture + visitors_settings JOIN)
+    │   ├── create_session_indexes.sql      # Performance indexes (run separately, CONCURRENTLY)
+    │   └── add_visitors_settings_index.sql # Index on visitors_settings.session_id
     └── setup/
-        └── chat_messages_rls.sql           # RLS policy for chat_messages (prerequisite)
+        ├── chat_messages_rls.sql           # RLS policy for chat_messages (prerequisite)
+        └── visitors_settings_rls.sql       # RLS policy for visitors_settings (prerequisite)
 ```
 
 ## Technology Stack
@@ -149,12 +151,31 @@ RLS is enabled; users may only read their own row (anon key access). A DB trigge
 | Function | Returns | Purpose |
 |---|---|---|
 | `safe_jsonb(val text)` | `jsonb` | Safe JSON cast — returns `NULL` on parse failure instead of raising an error |
-| `get_session_list(...)` | `jsonb` | Two-stage session query: Stage 1 finds candidate session IDs via lightweight GROUP BY; Stage 2 extracts full JSONB metadata for those sessions only. Accepts params: `p_limit`, `p_cursor`, `p_date_from`, `p_date_to`, `p_msg_min`, `p_msg_max`, `p_tools`, `p_categories`, `p_request_types`, `p_session_id` |
-| `get_filter_options()` | `jsonb` | Returns distinct tool names, categories, and request types from the last 7 days |
+| `get_session_list(...)` | `jsonb` | Two-stage session query: Stage 1 finds candidate session IDs via lightweight GROUP BY; Stage 2 extracts full JSONB metadata + visitors_settings enrichment. Accepts params: `p_limit`, `p_cursor`, `p_date_from`, `p_date_to`, `p_msg_min`, `p_msg_max`, `p_tools`, `p_categories`, `p_request_types`, `p_session_id`, `p_projects`, `p_visitor_types`, `p_languages`, `p_validation`, `p_is_whatsapp`, `p_has_lead`, `p_has_case`, `p_has_booking` |
+| `get_filter_options()` | `jsonb` | Returns distinct tool names, categories, request types, projects, visitor types, and languages from the last 7 days |
+
+### `visitors_settings` table (pre-existing, not created by this repo)
+
+| Column | Type | Notes |
+|---|---|---|
+| `session_id` | text | JOIN key to `chat_messages.session_id` |
+| `project` | text | Project name |
+| `type` | text | Visitor type |
+| `language` | text | Language |
+| `validation` | boolean | Whether the visitor is validated |
+| `is_whatsapp` | boolean | Whether the session is from WhatsApp |
+| `lead_id` | numeric | Lead ID (presence used as filter) |
+| `case_id` | numeric | Case ID (presence used as filter) |
+| `booking_identifier` | text | Booking identifier (presence used as filter) |
+| `request_id` | text | Request ID |
+| `masked_client_phone` | text | Masked client phone number |
+
+Enrichment data from `visitors_settings` is LEFT JOINed in `get_session_list` Stage 2 and displayed as badges in the session list and chat header.
 
 ### Prerequisite setup (`supabase/setup/`)
 
-`chat_messages_rls.sql` — enables RLS on `chat_messages` and creates a `SELECT` policy for authenticated users. Without this, authenticated users will see 0 sessions. This is in `setup/` (not `migrations/`) because it targets a pre-existing table not managed by this repo.
+- `chat_messages_rls.sql` — enables RLS on `chat_messages` and creates a `SELECT` policy for authenticated users. Without this, authenticated users will see 0 sessions. This is in `setup/` (not `migrations/`) because it targets a pre-existing table not managed by this repo.
+- `visitors_settings_rls.sql` — enables RLS on `visitors_settings` and creates a `SELECT` policy for authenticated users. Required for the session enrichment JOIN to work.
 
 ## Message Format
 
@@ -249,6 +270,10 @@ The Edge Function:
 - **XSS prevention** — all user-supplied or database-sourced text is passed through `escapeHtml()` before setting `innerHTML`. Never set `innerHTML` with raw data.
 - **Lazy loading** — Session list uses RPC `get_session_list` (two-stage architecture: fast GROUP BY for candidate IDs, then JSONB metadata extraction for those sessions only). Default load: 50 most recent sessions. Infinite scroll loads 10 more per batch. Filters are applied server-side via "Apply Filters" button with a max 3-day date range. Filter options (tools, categories, request types) are fetched once at login via `get_filter_options` RPC (scoped to last 7 days)
 - **Server-side search** — Session ID search queries the entire `chat_messages` table via `p_session_id` ILIKE parameter on `get_session_list`. Debounced at 400ms with a "Searching..." indicator
+- **Shareable URLs** — selecting a session updates the URL with `?session=<id>` via `history.replaceState`; on load, auto-selects the session if present in the URL
+- **Keyboard navigation** — Escape closes all modals/dropdowns; arrow keys navigate session list items; session items are tabbable (`tabIndex=0`)
+- **Copy session ID** — clicking the session ID in the chat header copies it to clipboard with visual feedback
+- **Empty states** — session list shows "No sessions found" or "No sessions match your filters" with a Clear Filters link
 - **Timezone** — All dates displayed in `'Europe/Chisinau'` timezone (hardcoded constant `TIME_ZONE` near the bottom of `app.js`)
 - **Error handling** — connection errors shown in `#login-error`; message errors logged to console
 - **Status log** — `logStatus()` is a no-op that writes to `console.log` only; the visible status log was removed from the login UI
@@ -258,9 +283,10 @@ The Edge Function:
 ### CSS (index.html)
 
 - All styles are in a single `<style>` block in `index.html`
-- CSS custom properties (variables) defined in `:root` control the color palette
+- CSS custom properties (variables) defined in `:root` control the color palette, shadows (`--shadow-sm` through `--shadow-xl`), radii (`--radius-sm` through `--radius-full`), and z-index layers (`--z-sidebar`, `--z-dropdown`, `--z-overlay`, `--z-modal`)
 - WhatsApp-inspired design: white left bubbles for customers, green right bubbles for AI, yellow center bubbles for tool calls
 - Responsive breakpoint at `768px` (mobile: sidebar overlays)
+- Accessibility: `prefers-reduced-motion` disables animations; `focus-visible` outlines on all interactive elements; ARIA attributes on modals (`role="dialog"`, `aria-modal`, `aria-labelledby`); `aria-live="polite"` on session count
 
 ### HTML Structure
 
@@ -272,7 +298,7 @@ The Edge Function:
   - `.chat-area` — wraps the header bar and `#chat-main`:
     - `#chat-header-bar` — permanent header with `#chat-session-controls` (left, session-specific) and `.chat-header-right` (right: Refresh button)
     - `#chat-main` — scrollable message area; wiped and repopulated on session switch
-- `app.js` is loaded with a cache-busting query param (`?v=42`) — increment this when deploying changes
+- `app.js` is loaded with a cache-busting query param (`?v=43`) — increment this when deploying changes
 - Login panel contains only the environment selector (if multi-env), "Sign in with Google" button, and `#login-error`; no credential input fields, no status log
 - Sidebar header shows environment switcher dropdown and Live badge; session info bar below filters shows session count + time gate
 
@@ -286,6 +312,12 @@ Filtering is split between server-side (RPC) and client-side:
 - **Tools** — session must contain **all** selected tools (AND logic)
 - **Categories** — session must match **at least one** selected category (OR logic)
 - **Request types** — session must match **at least one** selected request type (OR logic)
+- **Project** — session must match **at least one** selected project (OR logic, via `visitors_settings`)
+- **Visitor type** — session must match **at least one** selected type (OR logic, via `visitors_settings`)
+- **Language** — session must match **at least one** selected language (OR logic, via `visitors_settings`)
+- **Validated** — exact boolean match (via `visitors_settings`)
+- **WhatsApp** — exact boolean match (via `visitors_settings`)
+- **Has lead / Has case / Has booking** — boolean presence filters (via `visitors_settings`)
 
 **Server-side search (debounced, via search input):**
 - **Session ID search** — ILIKE substring match on `session_id` across the entire database; 400ms debounce; returns up to 50 results
