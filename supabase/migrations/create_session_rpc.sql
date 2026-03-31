@@ -286,36 +286,43 @@ END;
 $$;
 
 -- ── RPC: get_filter_options ─────────────────────────────────────────────────
--- Scoped to last 7 days for performance on large tables.
+-- Two separate queries for speed: chat_messages scan (AI metadata) and
+-- visitors_settings scan (visitor options). Each is lightweight on its own.
 -- ────────────────────────────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION get_filter_options()
 RETURNS jsonb
 LANGUAGE plpgsql STABLE
 AS $$
 DECLARE
-  v_since timestamptz := NOW() - INTERVAL '7 days';
-  result jsonb;
+  v_since timestamptz := NOW() - INTERVAL '3 days';
+  v_tools jsonb;
+  v_categories jsonb;
+  v_request_types jsonb;
+  v_projects jsonb;
+  v_visitor_types jsonb;
+  v_languages jsonb;
 BEGIN
-  WITH
-  tool_names AS (
-    SELECT DISTINCT tc.val->>'name' AS name
+
+  -- ── AI metadata from chat_messages (scoped to last 3 days) ──
+  SELECT COALESCE(jsonb_agg(DISTINCT name ORDER BY name), '[]'::jsonb) INTO v_tools
+  FROM (
+    SELECT tc.val->>'name' AS name
     FROM   chat_messages cm,
            LATERAL jsonb_array_elements(
              CASE WHEN jsonb_typeof(cm.message->'tool_calls') = 'array'
                    AND jsonb_array_length(cm.message->'tool_calls') > 0
                   THEN cm.message->'tool_calls' ELSE '[]'::jsonb END
            ) AS tc(val)
-    WHERE  cm.created_at >= v_since
-      AND  tc.val->>'name' IS NOT NULL
+    WHERE  cm.created_at >= v_since AND tc.val->>'name' IS NOT NULL
     UNION
-    SELECT DISTINCT cm.message->>'name' AS name
+    SELECT cm.message->>'name'
     FROM   chat_messages cm
-    WHERE  cm.created_at >= v_since
-      AND  cm.message->>'type' = 'tool'
-      AND  cm.message->>'name' IS NOT NULL
-  ),
-  category_names AS (
-    SELECT DISTINCT parsed->>'request_category' AS name
+    WHERE  cm.created_at >= v_since AND cm.message->>'type' = 'tool' AND cm.message->>'name' IS NOT NULL
+  ) t;
+
+  SELECT COALESCE(jsonb_agg(DISTINCT name ORDER BY name), '[]'::jsonb) INTO v_categories
+  FROM (
+    SELECT parsed->>'request_category' AS name
     FROM (
       SELECT CASE
         WHEN jsonb_typeof(cm.message->'content') = 'object' THEN cm.message->'content'->'output'
@@ -330,9 +337,11 @@ BEGIN
              OR jsonb_array_length(cm.message->'tool_calls') = 0)
     ) sub
     WHERE parsed->>'request_category' IS NOT NULL
-  ),
-  request_type_names AS (
-    SELECT DISTINCT parsed->>'request_type' AS name
+  ) c;
+
+  SELECT COALESCE(jsonb_agg(DISTINCT name ORDER BY name), '[]'::jsonb) INTO v_request_types
+  FROM (
+    SELECT parsed->>'request_type' AS name
     FROM (
       SELECT CASE
         WHEN jsonb_typeof(cm.message->'content') = 'object' THEN cm.message->'content'->'output'
@@ -347,36 +356,29 @@ BEGIN
              OR jsonb_array_length(cm.message->'tool_calls') = 0)
     ) sub
     WHERE parsed->>'request_type' IS NOT NULL
-  ),
-  -- Visitor settings filter options (scoped to sessions active in the last 7 days)
-  vs_recent AS (
-    SELECT DISTINCT session_id FROM chat_messages WHERE created_at >= v_since
-  ),
-  vs_projects AS (
-    SELECT DISTINCT vs.project AS name FROM visitors_settings vs
-    INNER JOIN vs_recent r ON vs.session_id = r.session_id
-    WHERE vs.project IS NOT NULL
-  ),
-  vs_visitor_types AS (
-    SELECT DISTINCT vs.type AS name FROM visitors_settings vs
-    INNER JOIN vs_recent r ON vs.session_id = r.session_id
-    WHERE vs.type IS NOT NULL
-  ),
-  vs_languages AS (
-    SELECT DISTINCT vs.language AS name FROM visitors_settings vs
-    INNER JOIN vs_recent r ON vs.session_id = r.session_id
-    WHERE vs.language IS NOT NULL
-  )
-  SELECT jsonb_build_object(
-    'tools',         COALESCE((SELECT jsonb_agg(name ORDER BY name) FROM tool_names),         '[]'::jsonb),
-    'categories',    COALESCE((SELECT jsonb_agg(name ORDER BY name) FROM category_names),     '[]'::jsonb),
-    'request_types', COALESCE((SELECT jsonb_agg(name ORDER BY name) FROM request_type_names), '[]'::jsonb),
-    'projects',      COALESCE((SELECT jsonb_agg(name ORDER BY name) FROM vs_projects),        '[]'::jsonb),
-    'visitor_types', COALESCE((SELECT jsonb_agg(name ORDER BY name) FROM vs_visitor_types),   '[]'::jsonb),
-    'languages',     COALESCE((SELECT jsonb_agg(name ORDER BY name) FROM vs_languages),       '[]'::jsonb)
-  ) INTO result;
+  ) r;
 
-  RETURN result;
+  -- ── Visitor options from visitors_settings directly (no chat_messages join) ──
+  SELECT COALESCE(jsonb_agg(DISTINCT project ORDER BY project), '[]'::jsonb)
+  INTO v_projects
+  FROM visitors_settings WHERE project IS NOT NULL;
+
+  SELECT COALESCE(jsonb_agg(DISTINCT type ORDER BY type), '[]'::jsonb)
+  INTO v_visitor_types
+  FROM visitors_settings WHERE type IS NOT NULL;
+
+  SELECT COALESCE(jsonb_agg(DISTINCT language ORDER BY language), '[]'::jsonb)
+  INTO v_languages
+  FROM visitors_settings WHERE language IS NOT NULL;
+
+  RETURN jsonb_build_object(
+    'tools',         v_tools,
+    'categories',    v_categories,
+    'request_types', v_request_types,
+    'projects',      v_projects,
+    'visitor_types', v_visitor_types,
+    'languages',     v_languages
+  );
 END;
 $$;
 

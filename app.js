@@ -721,15 +721,23 @@ function clearStatusLog() {
 // ── Sessions (RPC-based lazy loading) ──
 
 // Fetch all distinct filter options from the DB (called once at login / refresh)
-async function loadFilterOptions() {
+// Retries once on failure after a short delay.
+async function loadFilterOptions(retries = 1) {
   try {
-    // Race against a 8s timeout so a slow query doesn't block login
     const rpcPromise = db.rpc('get_filter_options');
     const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('get_filter_options timed out')), 8000)
+      setTimeout(() => reject(new Error('get_filter_options timed out')), 10000)
     );
     const { data, error } = await Promise.race([rpcPromise, timeoutPromise]);
-    if (error) { console.warn('[filters] get_filter_options error:', error); return; }
+    if (error) {
+      console.warn('[filters] get_filter_options error:', error);
+      if (retries > 0) {
+        console.log('[filters] Retrying in 3s...');
+        await new Promise(r => setTimeout(r, 3000));
+        return loadFilterOptions(retries - 1);
+      }
+      return;
+    }
     if (data) {
       allToolNames = (data.tools || []).sort();
       allCategories = (data.categories || []).sort();
@@ -737,9 +745,15 @@ async function loadFilterOptions() {
       allProjects = (data.projects || []).sort();
       allVisitorTypes = (data.visitor_types || []).sort();
       allLanguages = (data.languages || []).sort();
+      if (retries < 1) populateFilters(); // repopulate after retry success
     }
   } catch (err) {
     console.warn('[filters] loadFilterOptions skipped:', err.message);
+    if (retries > 0) {
+      console.log('[filters] Retrying in 3s...');
+      await new Promise(r => setTimeout(r, 3000));
+      return loadFilterOptions(retries - 1);
+    }
   }
 }
 
@@ -1372,7 +1386,6 @@ function renderMessages(rows, sessionId) {
     <button class="chat-reviewed-btn${isReviewed ? ' reviewed-active' : ''}" id="chat-reviewed-btn">${isReviewed ? 'Reviewed ✓' : 'Mark Reviewed'}</button>
     <button class="chat-feedback-btn" id="chat-feedback-btn">Feedback</button>
     <span class="meta-info">${rows.length} messages</span>
-    <div class="chat-header-counts">${buildTypePillsHtml(headerCounts)}</div>
     ${visitorInfoHtml}
   `;
 

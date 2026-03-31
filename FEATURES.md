@@ -30,7 +30,6 @@ Update this file whenever a feature is added, changed, or completed.
   - Mark Reviewed / Reviewed ✓ toggle button
   - Feedback button
   - Total message count
-  - Type-count pills (human / ai / tool / system)
   - Visitor settings badges (project, visitor type, language, WhatsApp, validated, lead/case/booking)
 - [x] **Burger menu** (☰) in top nav with dropdown containing:
   - Signed-in user email and role badge (Admin / User)
@@ -116,14 +115,14 @@ Update this file whenever a feature is added, changed, or completed.
 - [x] **Visitor badges in chat header** — project (indigo), visitor type (pink), language (lime), WhatsApp (teal), validated (teal), lead/case/booking entity (purple) shown in chat header when session is selected
 - [x] **Badge separation** — visitor settings badges shown only in chat header; AI conversation badges (categories, request types) shown only in session list items
 - [x] **Visitor settings filters** — server-side filters for project, visitor type, language (multi-select dropdown checklists, OR logic), validation, WhatsApp (boolean select), has lead/case/booking (boolean select)
-- [x] **Filter options populated from `get_filter_options`** — projects, visitor types, languages scoped to last 7 days
+- [x] **Filter options populated from `get_filter_options`** — AI metadata (tools, categories, types) scoped to last 3 days; visitor options (projects, visitor types, languages) queried directly from `visitors_settings`. Retries once on timeout.
 
 ### UI / UX
 - [x] WhatsApp-inspired design with CSS custom properties for theming
 - [x] CSS design tokens: shadow scale (`--shadow-sm` to `--shadow-xl`), radius scale (`--radius-sm` to `--radius-full`), z-index layers (`--z-sidebar` to `--z-modal`)
 - [x] Responsive layout: sidebar overlays at ≤768px
 - [x] Collapsible tool call / tool result details (`<details>` element)
-- [x] Cache-busting query param on `app.js` (`?v=50`) — increment when deploying
+- [x] Cache-busting query param on `app.js` (`?v=51`) — increment when deploying
 - [x] Loading overlay during session load and filter apply
 - [x] "Searching..." indicator in session list during server-side search
 - [x] **Empty states** — "No sessions found" or "No sessions match your filters" with Clear Filters action link

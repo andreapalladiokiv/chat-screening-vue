@@ -152,7 +152,7 @@ RLS is enabled; users may only read their own row (anon key access). A DB trigge
 |---|---|---|
 | `safe_jsonb(val text)` | `jsonb` | Safe JSON cast — returns `NULL` on parse failure instead of raising an error |
 | `get_session_list(...)` | `jsonb` | Two-stage session query: Stage 1 finds candidate session IDs via lightweight GROUP BY; Stage 2 extracts full JSONB metadata + visitors_settings enrichment. Accepts params: `p_limit`, `p_cursor`, `p_date_from`, `p_date_to`, `p_msg_min`, `p_msg_max`, `p_tools`, `p_categories`, `p_request_types`, `p_session_id`, `p_projects`, `p_visitor_types`, `p_languages`, `p_validation`, `p_is_whatsapp`, `p_has_lead`, `p_has_case`, `p_has_booking` |
-| `get_filter_options()` | `jsonb` | Returns distinct tool names, categories, request types, projects, visitor types, and languages from the last 7 days |
+| `get_filter_options()` | `jsonb` | Returns distinct tool names, categories, request types (from last 3 days of `chat_messages`), and projects, visitor types, languages (directly from `visitors_settings`, no date scoping). Uses separate queries for performance. |
 
 ### `visitors_settings` table (pre-existing, not created by this repo)
 
@@ -268,7 +268,7 @@ The Edge Function:
 - **Module pattern** — IIFE `init()` runs on load; no ES modules
 - **Global state** — `db`, `allSessions`, `allToolNames`, `allCategories`, `allRequestTypes`, `currentSessionId`, `feedbackMeta`, `reviewedSessions`, `environments`, `currentUserRole`, `sessionCursor`, `isLoadingMore`, `noMoreSessions`, `filtersApplied`, `currentFilterParams`, `searchResults`, `searchDebounceTimer` are top-level variables
 - **XSS prevention** — all user-supplied or database-sourced text is passed through `escapeHtml()` before setting `innerHTML`. Never set `innerHTML` with raw data.
-- **Lazy loading** — Session list uses RPC `get_session_list` (two-stage architecture: fast GROUP BY for candidate IDs, then JSONB metadata extraction for those sessions only). Default load: 50 most recent sessions. Infinite scroll loads 10 more per batch. Filters are applied server-side via "Apply Filters" button with a max 3-day date range. Filter options (tools, categories, request types) are fetched once at login via `get_filter_options` RPC (scoped to last 7 days)
+- **Lazy loading** — Session list uses RPC `get_session_list` (two-stage architecture: fast GROUP BY for candidate IDs, then JSONB metadata extraction for those sessions only). Default load: 50 most recent sessions. Infinite scroll loads 10 more per batch. Filters are applied server-side via "Apply Filters" button with a max 3-day date range. Filter options (tools, categories, request types) are fetched once at login via `get_filter_options` RPC (AI metadata scoped to last 3 days; visitor options queried directly from `visitors_settings` without date scoping). Retries once on timeout with 3s delay.
 - **Server-side search** — Session ID search queries the entire `chat_messages` table via `p_session_id` ILIKE parameter on `get_session_list`. Debounced at 400ms with a "Searching..." indicator
 - **Shareable URLs** — selecting a session updates the URL with `?session=<id>` via `history.replaceState`; on load, auto-selects the session if present in the URL
 - **Keyboard navigation** — Escape closes all modals/dropdowns; arrow keys navigate session list items; session items are tabbable (`tabIndex=0`)
@@ -279,7 +279,7 @@ The Edge Function:
 - **Status log** — `logStatus()` is a no-op that writes to `console.log` only; the visible status log was removed from the login UI
 - **Environment switcher** — dropdown in the top nav bar (near Live badge) allows switching environments without logging out; triggers sign-out, re-auth with the new project's OAuth
 - **Time gate** — shows the time range (last-activity based) of currently loaded sessions in the session info bar
-- **Badge separation** — visitor settings badges (project, visitor type, language, WhatsApp, validated, lead/case/booking) shown only in chat header; AI conversation badges (categories, request types, verified, end) shown only in session list items
+- **Badge separation** — visitor settings badges (project, visitor type, language, WhatsApp, validated, lead/case/booking) shown only in chat header; AI conversation badges (categories, request types, verified, end) shown only in session list items. Chat header shows message count but no type pills (human/ai/tool/system).
 
 ### CSS (index.html)
 
@@ -302,7 +302,7 @@ The Edge Function:
     - `.chat-area` — wraps the header bar and `#chat-main`:
       - `#chat-header-bar` — permanent header with `#chat-session-controls` (left: reviewed/feedback buttons, message count, type pills, visitor settings badges)
       - `#chat-main` — scrollable message area; wiped and repopulated on session switch
-- `app.js` is loaded with a cache-busting query param (`?v=50`) — increment this when deploying changes
+- `app.js` is loaded with a cache-busting query param (`?v=51`) — increment this when deploying changes
 - Login panel contains only the environment selector (if multi-env), "Sign in with Google" button, and `#login-error`; no credential input fields, no status log
 
 ## Filtering Logic

@@ -796,9 +796,9 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 6px 16px;
+      padding: 10px 16px;
       border-bottom: 1px solid var(--border);
-      min-height: 28px;
+      min-height: 50px;
     }
     .session-count {
       font-size: 12px;
@@ -875,6 +875,7 @@
       gap: 8px;
       min-width: 0;
       flex-shrink: 0;
+      min-height: 50px;
     }
 
     .chat-session-controls {
@@ -1906,7 +1907,7 @@
   </script>
   <!-- config.js is gitignored; its absence is fine — the app falls back to manual entry -->
   <script src="config.js" onerror="console.info('config.js not found — using manual credential entry.');"></script>
-  <script src="app.js?v=50"
+  <script src="app.js?v=51"
           onerror="document.getElementById('login-error').style.display='block'; document.getElementById('login-error').textContent='Failed to load app.js.';">
   </script>
 </body>
