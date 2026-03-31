@@ -170,12 +170,12 @@ RLS is enabled; users may only read their own row (anon key access). A DB trigge
 | `request_id` | text | Request ID |
 | `masked_client_phone` | text | Masked client phone number |
 
-Enrichment data from `visitors_settings` is LEFT JOINed in `get_session_list` Stage 2 and displayed as badges in the session list and chat header.
+Enrichment data from `visitors_settings` is LEFT JOINed in `get_session_list` Stage 2. Visitor badges (project, type, language, WhatsApp, validated, lead/case/booking) are displayed in the chat header bar; AI conversation badges (categories, request types) are displayed in the session list items.
 
 ### Prerequisite setup (`supabase/setup/`)
 
 - `chat_messages_rls.sql` — enables RLS on `chat_messages` and creates a `SELECT` policy for authenticated users. Without this, authenticated users will see 0 sessions. This is in `setup/` (not `migrations/`) because it targets a pre-existing table not managed by this repo.
-- `visitors_settings_rls.sql` — enables RLS on `visitors_settings` and creates a `SELECT` policy for authenticated users. Required for the session enrichment JOIN to work.
+- `visitors_settings_rls.sql` — enables RLS on `visitors_settings`, grants `SELECT` to `authenticated`, and creates a `SELECT` policy. Both the GRANT and the RLS policy are required for the session enrichment JOIN to work.
 
 ## Message Format
 
@@ -272,13 +272,14 @@ The Edge Function:
 - **Server-side search** — Session ID search queries the entire `chat_messages` table via `p_session_id` ILIKE parameter on `get_session_list`. Debounced at 400ms with a "Searching..." indicator
 - **Shareable URLs** — selecting a session updates the URL with `?session=<id>` via `history.replaceState`; on load, auto-selects the session if present in the URL
 - **Keyboard navigation** — Escape closes all modals/dropdowns; arrow keys navigate session list items; session items are tabbable (`tabIndex=0`)
-- **Copy session ID** — clicking the session ID in the chat header copies it to clipboard with visual feedback
+- **Copy session ID** — hover over a session ID in the session list to reveal a copy button; click copies to clipboard with visual feedback (✓)
 - **Empty states** — session list shows "No sessions found" or "No sessions match your filters" with a Clear Filters link
 - **Timezone** — All dates displayed in `'Europe/Chisinau'` timezone (hardcoded constant `TIME_ZONE` near the bottom of `app.js`)
 - **Error handling** — connection errors shown in `#login-error`; message errors logged to console
 - **Status log** — `logStatus()` is a no-op that writes to `console.log` only; the visible status log was removed from the login UI
-- **Environment switcher** — dropdown in the sidebar header (near Live badge) allows switching environments without logging out; triggers sign-out, re-auth with the new project's OAuth
+- **Environment switcher** — dropdown in the top nav bar (near Live badge) allows switching environments without logging out; triggers sign-out, re-auth with the new project's OAuth
 - **Time gate** — shows the time range (last-activity based) of currently loaded sessions in the session info bar
+- **Badge separation** — visitor settings badges (project, visitor type, language, WhatsApp, validated, lead/case/booking) shown only in chat header; AI conversation badges (categories, request types, verified, end) shown only in session list items
 
 ### CSS (index.html)
 
@@ -291,16 +292,18 @@ The Edge Function:
 ### HTML Structure
 
 - Two top-level panels: `#login-panel` (flex, visible by default) and `#chat-panel` (hidden until connected, shown via `.active` class)
-- Inside `#chat-panel`:
-  - `#sidebar` — session list, search, filters; sidebar header contains a **burger menu** (☰) button and a pulsing `• Live` badge
+- Inside `#chat-panel` (vertical flex layout):
+  - `.top-nav` — horizontal nav bar containing: **burger menu** (☰) with dropdown, **search input**, **filter button** (opens popover), **env switcher**, **Live badge**, **Refresh button**
     - The burger menu dropdown shows: signed-in user email + role badge, **Users** and **Invite** items (Invite visible to admins only), and **Logout**
-    - Users / Invite open the admin settings modal; Logout signs out and returns to the login screen
-  - `.chat-area` — wraps the header bar and `#chat-main`:
-    - `#chat-header-bar` — permanent header with `#chat-session-controls` (left, session-specific) and `.chat-header-right` (right: Refresh button)
-    - `#chat-main` — scrollable message area; wiped and repopulated on session switch
-- `app.js` is loaded with a cache-busting query param (`?v=43`) — increment this when deploying changes
+    - The **filter button** opens a fixed-position popover with all filters organized into labeled groups (Session, AI Response, Visitor, CRM); Apply closes the popover
+  - `.filter-tags-bar` — horizontal strip of active filter condition tags (shown only when filters are active); each tag is dismissable (x) and triggers re-apply; "Clear all" link removes everything
+  - `.content-area` — horizontal flex containing:
+    - `#sidebar` — session info bar (count + time gate) and scrollable session list
+    - `.chat-area` — wraps the header bar and `#chat-main`:
+      - `#chat-header-bar` — permanent header with `#chat-session-controls` (left: reviewed/feedback buttons, message count, type pills, visitor settings badges)
+      - `#chat-main` — scrollable message area; wiped and repopulated on session switch
+- `app.js` is loaded with a cache-busting query param (`?v=50`) — increment this when deploying changes
 - Login panel contains only the environment selector (if multi-env), "Sign in with Google" button, and `#login-error`; no credential input fields, no status log
-- Sidebar header shows environment switcher dropdown and Live badge; session info bar below filters shows session count + time gate
 
 ## Filtering Logic
 
@@ -352,6 +355,12 @@ Reviewed state is managed client-side (no database writes):
 7. **chat-header-bar lives outside chat-main**: `#chat-header-bar` is a sibling of `#chat-main`, not a child. This means it survives `chatMain.innerHTML = ''` calls during session switches and logout. Do not move it inside `#chat-main`.
 
 8. **`chat_view_user_roles` must exist before first login**: `fetchOrCreateUserRole()` is called on every auth success. If the table is missing, all users are immediately signed out with an "Access denied" error. Run the `create_user_roles.sql` migration before deploying.
+
+9. **GRANT SELECT required alongside RLS**: Supabase requires both a table-level `GRANT SELECT ... TO authenticated` and an RLS policy for queries to work. Missing the GRANT causes 500 errors even when the RLS policy exists. This applies to `chat_view_user_roles`, `visitors_settings`, and `chat_messages`.
+
+10. **Recursive RLS policies cause 500 errors**: An RLS policy on `chat_view_user_roles` that itself queries `chat_view_user_roles` (e.g., "Admins manage roles") causes PostgreSQL error `42P17: infinite recursion detected`. Only the simple `auth.uid() = user_id` SELECT policy should exist.
+
+11. **`visitors_settings` index required for large datasets**: Without `idx_visitors_settings_session_id`, the `get_filter_options` RPC times out (error `57014`) on environments with large `visitors_settings` tables. Run `add_visitors_settings_index.sql` on every environment.
 
 ## Development Workflow
 

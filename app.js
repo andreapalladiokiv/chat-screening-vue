@@ -34,7 +34,6 @@ const sessionCount = document.getElementById('session-count');
 const sessionList = document.getElementById('session-list');
 const chatMain = document.getElementById('chat-main');
 const chatEmpty = document.getElementById('chat-empty');
-const filterToggle = document.getElementById('filter-toggle');
 const filterPanel = document.getElementById('filter-panel');
 const filterDateFrom = document.getElementById('filter-date-from');
 const filterDateTo = document.getElementById('filter-date-to');
@@ -62,6 +61,10 @@ const filterReviewed = document.getElementById('filter-reviewed');
 const filterClear = document.getElementById('filter-clear');
 const filterApply = document.getElementById('filter-apply');
 const filterDateWarning = document.getElementById('filter-date-warning');
+const filterIconBtn = document.getElementById('filter-icon-btn');
+const filterPopoverOverlay = document.getElementById('filter-popover-overlay');
+const filterPopoverClose = document.getElementById('filter-popover-close');
+const filterTagsBar = document.getElementById('filter-tags-bar');
 const timeGateEl = document.getElementById('time-gate');
 const envSwitcher = document.getElementById('env-switcher');
 const feedbackOverlay = document.getElementById('feedback-overlay');
@@ -108,19 +111,23 @@ console.log('[app.js] Script loaded. Supabase available:', !!(window.supabase &&
   refreshBtn.addEventListener('click', handleRefresh);
   sessionSearch.addEventListener('input', handleSessionSearch);
 
-  // Filter controls
-  filterToggle.addEventListener('click', () => {
-    filterToggle.classList.toggle('open');
-    filterPanel.classList.toggle('open');
+  // Filter popover toggle
+  filterIconBtn.addEventListener('click', () => {
+    const isOpen = filterPanel.classList.contains('open');
+    if (isOpen) { closeFilterPopover(); } else { openFilterPopover(); }
   });
+  filterPopoverOverlay.addEventListener('click', closeFilterPopover);
+  filterPopoverClose.addEventListener('click', closeFilterPopover);
+
+  // Filter controls
   // Date inputs validate the 3-day gap on change (for warning display)
   filterDateFrom.addEventListener('change', validateDateRange);
   filterDateTo.addEventListener('change', validateDateRange);
   // Sort and reviewed are client-side only — instant re-render
-  filterSort.addEventListener('change', renderSessionList);
-  filterReviewed.addEventListener('change', renderSessionList);
+  filterSort.addEventListener('change', () => { renderSessionList(); renderFilterTags(); });
+  filterReviewed.addEventListener('change', () => { renderSessionList(); renderFilterTags(); });
   // Apply / Clear buttons
-  filterApply.addEventListener('click', applyFilters);
+  filterApply.addEventListener('click', async () => { await applyFilters(); closeFilterPopover(); renderFilterTags(); });
 
   // Dropdown checklist toggle + click-outside
   document.addEventListener('click', (e) => {
@@ -134,7 +141,7 @@ console.log('[app.js] Script loaded. Supabase available:', !!(window.supabase &&
     }
     if (!e.target.closest('.dd-filter')) closeAllDropdowns();
   });
-  filterClear.addEventListener('click', clearFilters);
+  filterClear.addEventListener('click', async () => { await clearFilters(); closeFilterPopover(); renderFilterTags(); });
 
   // Feedback modal
   fbCancel.addEventListener('click', closeFeedbackModal);
@@ -188,6 +195,7 @@ console.log('[app.js] Script loaded. Supabase available:', !!(window.supabase &&
       closeFeedbackModal();
       closeAdminModal();
       closeUsersModal();
+      closeFilterPopover();
       closeAllDropdowns();
       burgerDropdown.classList.remove('open');
       return;
@@ -585,6 +593,110 @@ function closeAllDropdowns() {
     p.classList.remove('open');
     p.previousElementSibling.classList.remove('active');
   });
+}
+
+function openFilterPopover() {
+  filterPanel.classList.add('open');
+  filterPopoverOverlay.classList.add('open');
+}
+
+function closeFilterPopover() {
+  filterPanel.classList.remove('open');
+  filterPopoverOverlay.classList.remove('open');
+  closeAllDropdowns();
+}
+
+function renderFilterTags() {
+  const tags = [];
+
+  // Date
+  const dateFrom = filterDateFrom.value;
+  const dateTo = filterDateTo.value;
+  if (dateFrom) tags.push({ label: 'From', value: dateFrom, clear: () => { filterDateFrom.value = ''; } });
+  if (dateTo) tags.push({ label: 'To', value: dateTo, clear: () => { filterDateTo.value = ''; } });
+
+  // Messages
+  const msgMin = filterMsgMin.value;
+  const msgMax = filterMsgMax.value;
+  if (msgMin) tags.push({ label: 'Msg min', value: msgMin, clear: () => { filterMsgMin.value = ''; } });
+  if (msgMax) tags.push({ label: 'Msg max', value: msgMax, clear: () => { filterMsgMax.value = ''; } });
+
+  // Sort (only if non-default)
+  if (filterSort.value !== 'newest') {
+    const sortLabel = filterSort.options[filterSort.selectedIndex].text;
+    tags.push({ label: 'Sort', value: sortLabel, clear: () => { filterSort.value = 'newest'; renderSessionList(); } });
+  }
+
+  // Reviewed (only if non-default)
+  if (filterReviewed.value !== 'all') {
+    const revLabel = filterReviewed.options[filterReviewed.selectedIndex].text;
+    tags.push({ label: 'Reviewed', value: revLabel, clear: () => { filterReviewed.value = 'all'; renderSessionList(); } });
+  }
+
+  // Dropdown checklists
+  const ddConfigs = [
+    { panel: filterToolsPanel, trigger: filterToolsTrigger, label: 'Tools', defaultLabel: 'All tools', prefix: 'Tools' },
+    { panel: filterCategoryPanel, trigger: filterCategoryTrigger, label: 'Category', defaultLabel: 'All categories', prefix: 'Category' },
+    { panel: filterRequestTypePanel, trigger: filterRequestTypeTrigger, label: 'Type', defaultLabel: 'All types', prefix: 'Type' },
+    { panel: filterProjectPanel, trigger: filterProjectTrigger, label: 'Project', defaultLabel: 'All projects', prefix: 'Project' },
+    { panel: filterVisitorTypePanel, trigger: filterVisitorTypeTrigger, label: 'Visitor', defaultLabel: 'All visitor types', prefix: 'Visitor type' },
+    { panel: filterLanguagePanel, trigger: filterLanguageTrigger, label: 'Language', defaultLabel: 'All languages', prefix: 'Language' },
+  ];
+  for (const dd of ddConfigs) {
+    const checked = getCheckedValues(dd.panel);
+    if (checked.length > 0) {
+      const display = checked.length <= 2 ? checked.join(', ') : checked.length + ' selected';
+      tags.push({
+        label: dd.label, value: display,
+        clear: () => {
+          for (const cb of dd.panel.querySelectorAll('input[type=checkbox]')) cb.checked = false;
+          dd.trigger.textContent = dd.defaultLabel;
+        }
+      });
+    }
+  }
+
+  // Boolean selects
+  const boolConfigs = [
+    { el: filterValidation, label: 'Validated' },
+    { el: filterWhatsapp, label: 'WhatsApp' },
+    { el: filterHasLead, label: 'Has lead' },
+    { el: filterHasCase, label: 'Has case' },
+    { el: filterHasBooking, label: 'Has booking' },
+  ];
+  for (const bc of boolConfigs) {
+    if (bc.el.value) {
+      tags.push({ label: bc.label, value: bc.el.value === 'true' ? 'Yes' : 'No', clear: () => { bc.el.value = ''; } });
+    }
+  }
+
+  // Render
+  filterTagsBar.innerHTML = '';
+  if (tags.length === 0) {
+    filterTagsBar.classList.remove('has-tags');
+    filterIconBtn.classList.remove('has-filters');
+    return;
+  }
+  filterTagsBar.classList.add('has-tags');
+  filterIconBtn.classList.add('has-filters');
+  for (const tag of tags) {
+    const el = document.createElement('span');
+    el.className = 'filter-tag';
+    el.innerHTML = `<span class="filter-tag-label">${escapeHtml(tag.label)}:</span> ${escapeHtml(tag.value)} <button class="filter-tag-dismiss" title="Remove">&times;</button>`;
+    el.querySelector('.filter-tag-dismiss').addEventListener('click', async () => {
+      tag.clear();
+      renderFilterTags();
+      await applyFilters();
+      renderFilterTags();
+    });
+    filterTagsBar.appendChild(el);
+  }
+  // Clear all link
+  const clearAll = document.createElement('button');
+  clearAll.className = 'filter-tags-clear';
+  clearAll.textContent = 'Clear all';
+  clearAll.addEventListener('click', async () => { await clearFilters(); renderFilterTags(); renderSessionList(); });
+  filterTagsBar.appendChild(clearAll);
 }
 
 function showLoginError(msg) {
@@ -995,8 +1107,6 @@ function buildVisitorInfoHtml(session) {
   if (session.hasLead) parts.push('<span class="badge badge-entity">lead</span>');
   if (session.hasCase) parts.push('<span class="badge badge-entity">case</span>');
   if (session.hasBooking) parts.push('<span class="badge badge-entity">booking</span>');
-  if (session.maskedClientPhone) parts.push(`<span class="visitor-detail">${escapeHtml(session.maskedClientPhone)}</span>`);
-  if (session.requestId) parts.push(`<span class="visitor-detail">${escapeHtml(session.requestId)}</span>`);
   return parts.length ? `<div class="chat-header-visitor">${parts.join('')}</div>` : '';
 }
 
@@ -1005,27 +1115,7 @@ function buildSessionBadgesHtml(session) {
   if (reviewedSessions.has(session.id)) {
     badges.push('<span class="badge reviewed-badge">reviewed</span>');
   }
-  // Visitor settings badges (prominent)
-  if (session.project) {
-    badges.push(`<span class="badge badge-project">${escapeHtml(session.project)}</span>`);
-  }
-  if (session.visitorType) {
-    badges.push(`<span class="badge badge-visitor-type">${escapeHtml(session.visitorType)}</span>`);
-  }
-  if (session.language) {
-    badges.push(`<span class="badge badge-language">${escapeHtml(session.language)}</span>`);
-  }
-  if (session.isWhatsapp) {
-    badges.push('<span class="badge badge-whatsapp">WhatsApp</span>');
-  }
-  if (session.validation) {
-    badges.push('<span class="badge badge-validated">validated</span>');
-  }
-  // Entity presence indicators
-  if (session.hasLead) badges.push('<span class="badge badge-entity">lead</span>');
-  if (session.hasCase) badges.push('<span class="badge badge-entity">case</span>');
-  if (session.hasBooking) badges.push('<span class="badge badge-entity">booking</span>');
-  // AI metadata badges
+  // AI metadata badges only (conversation data)
   for (const cat of session.categories) {
     badges.push(`<span class="badge">${escapeHtml(cat)}</span>`);
   }
@@ -1098,12 +1188,20 @@ function renderSessionList() {
     const typePills = buildTypePillsHtml(tc);
     const badgesHtml = buildSessionBadgesHtml(session);
     li.innerHTML = `
-      <div class="session-id">${escapeHtml(session.id)}</div>
+      <div class="session-id">${escapeHtml(session.id)}<button class="session-id-copy-btn" title="Copy session ID" data-sid="${escapeHtml(session.id)}">&#x2398;</button></div>
       <div class="session-meta">${session.count} messages &middot; ${formatDate(session.latest)}</div>
       <div class="type-counts">${typePills}</div>
       ${badgesHtml}
     `;
     li.addEventListener('click', () => selectSession(session.id));
+    const copyBtn = li.querySelector('.session-id-copy-btn');
+    copyBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      navigator.clipboard.writeText(session.id).then(() => {
+        copyBtn.textContent = '✓';
+        setTimeout(() => { copyBtn.innerHTML = '&#x2398;'; }, 1200);
+      });
+    });
     frag.appendChild(li);
   }
   sessionList.appendChild(frag);
@@ -1273,7 +1371,6 @@ function renderMessages(rows, sessionId) {
   sessionControls.innerHTML = `
     <button class="chat-reviewed-btn${isReviewed ? ' reviewed-active' : ''}" id="chat-reviewed-btn">${isReviewed ? 'Reviewed ✓' : 'Mark Reviewed'}</button>
     <button class="chat-feedback-btn" id="chat-feedback-btn">Feedback</button>
-    <h3 class="session-id-copy" title="Click to copy session ID">${escapeHtml(sessionId)}</h3>
     <span class="meta-info">${rows.length} messages</span>
     <div class="chat-header-counts">${buildTypePillsHtml(headerCounts)}</div>
     ${visitorInfoHtml}
@@ -1285,18 +1382,6 @@ function renderMessages(rows, sessionId) {
     openFeedbackModal('chat', { session_id: sessionId, message_count: rows.length });
   });
 
-  // Copy session ID to clipboard on click
-  const sessionIdEl = sessionControls.querySelector('.session-id-copy');
-  if (sessionIdEl) {
-    sessionIdEl.addEventListener('click', () => {
-      navigator.clipboard.writeText(sessionId).then(() => {
-        const original = sessionIdEl.title;
-        sessionIdEl.title = 'Copied!';
-        sessionIdEl.classList.add('copied');
-        setTimeout(() => { sessionIdEl.title = original; sessionIdEl.classList.remove('copied'); }, 1500);
-      });
-    });
-  }
 
   // Messages container
   const container = document.createElement('div');

@@ -153,10 +153,234 @@
     #chat-panel {
       display: none;
       height: 100vh;
+      flex-direction: column;
     }
 
     #chat-panel.active {
       display: flex;
+    }
+
+    /* Top nav bar (burger + env + live + search) */
+    .top-nav {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 16px;
+      background: var(--sidebar-bg);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .top-nav-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      position: relative;
+    }
+    .top-nav-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-left: auto;
+    }
+    .top-nav .search-box {
+      flex: 1;
+      max-width: 320px;
+      padding: 0;
+      border: none;
+    }
+
+    /* Filter icon button in top nav */
+    .filter-icon-btn {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 5px 10px;
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-full);
+      font-size: 13px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.15s;
+    }
+    .filter-icon-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .filter-icon-btn.has-filters {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+    .filter-icon-btn.has-filters:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+    .filter-icon-btn svg { width: 14px; height: 14px; flex-shrink: 0; }
+
+    /* Filter popover */
+    .filter-popover-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: var(--z-overlay);
+    }
+    .filter-popover-overlay.open { display: block; }
+    .filter-popover {
+      display: none;
+      position: fixed;
+      top: 50px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 720px;
+      max-width: 95vw;
+      max-height: calc(100vh - 70px);
+      overflow-y: auto;
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-xl);
+      z-index: var(--z-modal);
+      padding: 20px 24px;
+    }
+    .filter-popover.open { display: block; }
+    .filter-popover-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .filter-popover-header h3 {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+    .filter-popover-close {
+      background: none;
+      border: none;
+      font-size: 18px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      padding: 2px 6px;
+      border-radius: var(--radius-sm);
+    }
+    .filter-popover-close:hover { background: var(--bg); }
+
+    .filter-group {
+      margin-bottom: 14px;
+    }
+    .filter-group-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+      display: block;
+    }
+    .filter-group-fields {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: flex-end;
+    }
+    .filter-group + .filter-group {
+      border-top: 1px solid var(--border);
+      padding-top: 14px;
+    }
+    .filter-cell {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .filter-cell > label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      white-space: nowrap;
+    }
+    .filter-cell select,
+    .filter-cell input[type="date"],
+    .filter-cell input[type="number"] {
+      padding: 6px 8px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      outline: none;
+      background: #fff;
+      min-width: 0;
+    }
+    .filter-cell input[type="date"] { width: 140px; }
+    .filter-cell input[type="number"] { width: 72px; }
+    .filter-cell select { min-width: 110px; }
+    .filter-cell select:focus,
+    .filter-cell input:focus { border-color: var(--accent); }
+    .filter-popover .dd-filter { min-width: 130px; }
+    .filter-popover .dd-trigger {
+      white-space: nowrap;
+      overflow: visible;
+      text-overflow: clip;
+      padding: 6px 8px;
+    }
+    .filter-popover-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+      margin-top: 16px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border);
+    }
+
+    /* Active filter tags strip */
+    .filter-tags-bar {
+      display: none;
+      flex-wrap: wrap;
+      gap: 6px;
+      padding: 6px 16px;
+      background: var(--sidebar-bg);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      align-items: center;
+    }
+    .filter-tags-bar.has-tags { display: flex; }
+    .filter-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-full);
+      font-size: 11px;
+      color: var(--text-primary);
+      white-space: nowrap;
+    }
+    .filter-tag-label {
+      color: var(--text-secondary);
+      font-weight: 600;
+    }
+    .filter-tag-dismiss {
+      background: none;
+      border: none;
+      font-size: 13px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      padding: 0;
+      line-height: 1;
+      margin-left: 2px;
+    }
+    .filter-tag-dismiss:hover { color: var(--danger); }
+    .filter-tags-clear {
+      background: none;
+      border: none;
+      font-size: 11px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      text-decoration: underline;
+      margin-left: 4px;
+    }
+    .filter-tags-clear:hover { color: var(--danger); }
+
+    /* Content area below filter bar */
+    .content-area {
+      flex: 1;
+      display: flex;
+      min-height: 0;
     }
 
     /* Sidebar */
@@ -168,26 +392,8 @@
       border-right: 1px solid var(--border);
       display: flex;
       flex-direction: column;
-      height: 100vh;
     }
 
-    .sidebar-header {
-      padding: 12px 16px;
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-
-    .sidebar-header h2 {
-      font-size: 18px;
-    }
-
-    .sidebar-header-right {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
 
     /* Admin Settings Modal */
     .admin-modal-overlay {
@@ -364,18 +570,20 @@
     }
 
     .search-box {
-      padding: 10px 16px;
-      border-bottom: 1px solid var(--border);
+      padding: 0;
     }
 
     .search-box input {
       width: 100%;
-      padding: 8px 12px;
-      border: none;
+      padding: 7px 14px;
+      border: 1px solid var(--border);
       border-radius: 20px;
       background: var(--bg);
-      font-size: 14px;
+      font-size: 13px;
       outline: none;
+    }
+    .search-box input:focus {
+      border-color: var(--accent);
     }
 
     .session-list {
@@ -385,7 +593,7 @@
     }
 
     .session-item {
-      padding: 14px 16px;
+      padding: 14px 10px;
       border-bottom: 1px solid var(--border);
       cursor: pointer;
       transition: background 0.15s;
@@ -422,7 +630,24 @@
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+      display: flex;
+      align-items: center;
+      gap: 4px;
     }
+    .session-id-copy-btn {
+      background: none;
+      border: none;
+      font-size: 12px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      padding: 1px 3px;
+      border-radius: 3px;
+      opacity: 0;
+      transition: opacity 0.15s;
+      flex-shrink: 0;
+    }
+    .session-item:hover .session-id-copy-btn { opacity: 1; }
+    .session-id-copy-btn:hover { background: var(--border); color: var(--accent); }
 
     .session-item .session-meta {
       font-size: 12px;
@@ -479,91 +704,7 @@
 
     /* session-count styling moved to .session-info-bar */
 
-    /* Filter Panel */
-    .filter-toggle {
-      padding: 8px 16px;
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--accent);
-      cursor: pointer;
-      border-bottom: 1px solid var(--border);
-      user-select: none;
-    }
-    .filter-toggle:hover { background: var(--bg); }
-    .filter-toggle.open::before { content: '▾ '; }
-    .filter-toggle:not(.open)::before { content: '▸ '; }
-
-    .filter-panel {
-      display: none;
-      padding: 10px 16px 6px;
-      border-bottom: 1px solid var(--border);
-      background: #fafbfc;
-    }
-    .filter-panel.open { display: block; }
-
-    .filter-row {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      margin-bottom: 8px;
-    }
-    .filter-row > label {
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--text-secondary);
-      white-space: nowrap;
-    }
-    .filter-row-entities {
-      display: grid;
-      grid-template-columns: auto 1fr auto 1fr auto 1fr;
-      align-items: center;
-      gap: 6px;
-    }
-    .filter-row-entities > label {
-      font-size: 11px;
-    }
-    .filter-row-entities > select {
-      padding: 4px 6px;
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      font-size: 12px;
-      outline: none;
-    }
-    .filter-inputs {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-    .filter-inputs label {
-      font-size: 12px;
-      color: var(--text-secondary);
-      white-space: nowrap;
-    }
-    .filter-row input[type="date"],
-    .filter-row input[type="number"],
-    .filter-inputs input[type="date"],
-    .filter-inputs input[type="number"] {
-      flex: 1;
-      min-width: 0;
-      padding: 4px 6px;
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      font-size: 12px;
-      outline: none;
-    }
-    .filter-row input:focus,
-    .filter-row select:focus,
-    .filter-inputs input:focus {
-      border-color: var(--accent);
-    }
-    .filter-row select {
-      width: 100%;
-      padding: 4px 6px;
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      font-size: 12px;
-      outline: none;
-    }
+    /* Filter popover panel */
     .dd-filter {
       position: relative;
       width: 100%;
@@ -619,34 +760,28 @@
     .filter-clear-btn {
       background: none;
       border: 1px solid var(--border);
-      border-radius: 4px;
-      padding: 4px 10px;
-      font-size: 11px;
+      border-radius: var(--radius-sm);
+      padding: 6px 14px;
+      font-size: 12px;
       color: var(--text-secondary);
       cursor: pointer;
+      white-space: nowrap;
     }
     .filter-clear-btn:hover {
       border-color: var(--danger);
       color: var(--danger);
     }
-
-    .filter-actions-row {
-      display: flex;
-      gap: 8px;
-      margin-top: 4px;
-      margin-bottom: 4px;
-    }
     .filter-apply-btn {
-      flex: 1;
-      padding: 6px 12px;
+      padding: 6px 18px;
       background: var(--accent);
       color: #fff;
       border: none;
-      border-radius: 4px;
+      border-radius: var(--radius-sm);
       font-size: 12px;
       font-weight: 600;
       cursor: pointer;
       transition: background 0.2s;
+      white-space: nowrap;
     }
     .filter-apply-btn:hover { background: var(--accent-hover); }
     .filter-apply-btn:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -654,7 +789,7 @@
       color: var(--danger);
       font-size: 11px;
       font-weight: 600;
-      margin-bottom: 4px;
+      margin-top: 4px;
     }
 
     .session-info-bar {
@@ -1339,6 +1474,9 @@
       .sidebar { width: 100%; position: absolute; z-index: var(--z-sidebar); }
       .sidebar.hidden { display: none; }
       .message { max-width: 85%; }
+      .top-nav { flex-wrap: wrap; }
+      .top-nav .search-box { order: 3; flex-basis: 100%; max-width: 100%; }
+      .filter-popover { width: 95vw; }
     }
     .google-btn {
       display: flex;
@@ -1465,174 +1603,222 @@
 
   <!-- Chat Panel -->
   <div id="chat-panel">
-    <!-- Sidebar -->
-    <div class="sidebar" id="sidebar">
-      <div class="sidebar-header">
-        <div style="display:flex;align-items:center;gap:8px;position:relative;">
-          <button class="burger-btn" id="burger-btn" title="Menu" aria-label="User menu">&#9776;</button>
-          <div class="burger-dropdown" id="burger-dropdown">
-            <div class="burger-user-info">
-              <div class="burger-user-email" id="burger-user-email"></div>
-              <span class="burger-user-role" id="burger-user-role"></span>
-            </div>
-            <button class="burger-menu-item" id="burger-users-btn" style="display:none">
-              <span>&#128101;</span> Users
-            </button>
-            <button class="burger-menu-item" id="burger-invite-btn" style="display:none">
-              <span>&#9993;</span> Invite
-            </button>
-            <div class="burger-divider"></div>
-            <button class="burger-menu-item danger" id="burger-logout-btn">
-              <span>&#8618;</span> Logout
-            </button>
+    <!-- Top Navigation -->
+    <div class="top-nav">
+      <div class="top-nav-left" style="position:relative;">
+        <button class="burger-btn" id="burger-btn" title="Menu" aria-label="User menu">&#9776;</button>
+        <div class="burger-dropdown" id="burger-dropdown">
+          <div class="burger-user-info">
+            <div class="burger-user-email" id="burger-user-email"></div>
+            <span class="burger-user-role" id="burger-user-role"></span>
           </div>
-        </div>
-        <div class="sidebar-header-right">
-          <select class="env-switcher" id="env-switcher"></select>
-          <span class="live-badge" id="live-badge"><span class="live-dot"></span>Live</span>
+          <button class="burger-menu-item" id="burger-users-btn" style="display:none">
+            <span>&#128101;</span> Users
+          </button>
+          <button class="burger-menu-item" id="burger-invite-btn" style="display:none">
+            <span>&#9993;</span> Invite
+          </button>
+          <div class="burger-divider"></div>
+          <button class="burger-menu-item danger" id="burger-logout-btn">
+            <span>&#8618;</span> Logout
+          </button>
         </div>
       </div>
       <div class="search-box">
         <input type="text" id="session-search" placeholder="Search sessions...">
       </div>
-      <!-- Filters -->
-      <div class="filter-toggle" id="filter-toggle">Filters</div>
-      <div class="filter-panel" id="filter-panel">
-        <div class="filter-row">
-          <label>Date</label>
-          <div class="filter-inputs">
-            <input type="date" id="filter-date-from">
-            <label>to</label>
-            <input type="date" id="filter-date-to">
+      <div style="position:relative;">
+        <button class="filter-icon-btn" id="filter-icon-btn" title="Filters" aria-label="Open filters">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M1.5 3h13M3.5 7h9M5.5 11h5"/></svg>
+          Filter
+        </button>
+          <div class="filter-popover" id="filter-panel">
+            <div class="filter-popover-header">
+              <h3>Filters</h3>
+              <button class="filter-popover-close" id="filter-popover-close" title="Close">&#10005;</button>
+            </div>
+
+            <!-- SESSION -->
+            <div class="filter-group">
+              <span class="filter-group-label">Session</span>
+              <div class="filter-group-fields">
+                <div class="filter-cell">
+                  <label>Date from</label>
+                  <input type="date" id="filter-date-from">
+                </div>
+                <div class="filter-cell">
+                  <label>Date to</label>
+                  <input type="date" id="filter-date-to">
+                </div>
+                <div class="filter-cell">
+                  <label>Msg min</label>
+                  <input type="number" id="filter-msg-min" placeholder="min" min="0">
+                </div>
+                <div class="filter-cell">
+                  <label>Msg max</label>
+                  <input type="number" id="filter-msg-max" placeholder="max" min="0">
+                </div>
+                <div class="filter-cell">
+                  <label>Sort by</label>
+                  <select id="filter-sort">
+                    <option value="newest">Newest first</option>
+                    <option value="oldest">Oldest first</option>
+                    <option value="most-msgs">Most messages</option>
+                    <option value="least-msgs">Fewest messages</option>
+                  </select>
+                </div>
+                <div class="filter-cell">
+                  <label>Reviewed</label>
+                  <select id="filter-reviewed">
+                    <option value="all">All sessions</option>
+                    <option value="unreviewed">Unreviewed only</option>
+                    <option value="reviewed">Reviewed only</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- AI RESPONSE -->
+            <div class="filter-group">
+              <span class="filter-group-label">AI Response</span>
+              <div class="filter-group-fields">
+                <div class="filter-cell">
+                  <label>Tools used</label>
+                  <div class="dd-filter" id="filter-tools-wrap">
+                    <button class="dd-trigger" id="filter-tools-trigger">All tools</button>
+                    <div class="dd-panel" id="filter-tools-panel"></div>
+                  </div>
+                </div>
+                <div class="filter-cell">
+                  <label>Category</label>
+                  <div class="dd-filter" id="filter-category-wrap">
+                    <button class="dd-trigger" id="filter-category-trigger">All categories</button>
+                    <div class="dd-panel" id="filter-category-panel"></div>
+                  </div>
+                </div>
+                <div class="filter-cell">
+                  <label>Request type</label>
+                  <div class="dd-filter" id="filter-request-type-wrap">
+                    <button class="dd-trigger" id="filter-request-type-trigger">All types</button>
+                    <div class="dd-panel" id="filter-request-type-panel"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- VISITOR -->
+            <div class="filter-group">
+              <span class="filter-group-label">Visitor</span>
+              <div class="filter-group-fields">
+                <div class="filter-cell">
+                  <label>Project</label>
+                  <div class="dd-filter" id="filter-project-wrap">
+                    <button class="dd-trigger" id="filter-project-trigger">All projects</button>
+                    <div class="dd-panel" id="filter-project-panel"></div>
+                  </div>
+                </div>
+                <div class="filter-cell">
+                  <label>Visitor type</label>
+                  <div class="dd-filter" id="filter-visitor-type-wrap">
+                    <button class="dd-trigger" id="filter-visitor-type-trigger">All visitor types</button>
+                    <div class="dd-panel" id="filter-visitor-type-panel"></div>
+                  </div>
+                </div>
+                <div class="filter-cell">
+                  <label>Language</label>
+                  <div class="dd-filter" id="filter-language-wrap">
+                    <button class="dd-trigger" id="filter-language-trigger">All languages</button>
+                    <div class="dd-panel" id="filter-language-panel"></div>
+                  </div>
+                </div>
+                <div class="filter-cell">
+                  <label>WhatsApp</label>
+                  <select id="filter-whatsapp">
+                    <option value="">All</option>
+                    <option value="true">Yes</option>
+                    <option value="false">No</option>
+                  </select>
+                </div>
+                <div class="filter-cell">
+                  <label>Validated</label>
+                  <select id="filter-validation">
+                    <option value="">All</option>
+                    <option value="true">Yes</option>
+                    <option value="false">No</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- CRM -->
+            <div class="filter-group">
+              <span class="filter-group-label">CRM</span>
+              <div class="filter-group-fields">
+                <div class="filter-cell">
+                  <label>Has lead</label>
+                  <select id="filter-has-lead">
+                    <option value="">All</option>
+                    <option value="true">Yes</option>
+                    <option value="false">No</option>
+                  </select>
+                </div>
+                <div class="filter-cell">
+                  <label>Has case</label>
+                  <select id="filter-has-case">
+                    <option value="">All</option>
+                    <option value="true">Yes</option>
+                    <option value="false">No</option>
+                  </select>
+                </div>
+                <div class="filter-cell">
+                  <label>Has booking</label>
+                  <select id="filter-has-booking">
+                    <option value="">All</option>
+                    <option value="true">Yes</option>
+                    <option value="false">No</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div id="filter-date-warning" class="filter-date-warning" style="display:none">Date range must not exceed 3 days.</div>
+            <div class="filter-popover-actions">
+              <button class="filter-clear-btn" id="filter-clear">Clear All</button>
+              <button class="filter-apply-btn" id="filter-apply">Apply Filters</button>
+            </div>
           </div>
-        </div>
-        <div class="filter-row">
-          <label>Messages</label>
-          <div class="filter-inputs">
-            <input type="number" id="filter-msg-min" placeholder="min" min="0">
-            <label>to</label>
-            <input type="number" id="filter-msg-max" placeholder="max" min="0">
-          </div>
-        </div>
-        <div class="filter-row">
-          <label>Tools used</label>
-          <div class="dd-filter" id="filter-tools-wrap">
-            <button class="dd-trigger" id="filter-tools-trigger">All tools</button>
-            <div class="dd-panel" id="filter-tools-panel"></div>
-          </div>
-        </div>
-        <div class="filter-row">
-          <label>Category</label>
-          <div class="dd-filter" id="filter-category-wrap">
-            <button class="dd-trigger" id="filter-category-trigger">All categories</button>
-            <div class="dd-panel" id="filter-category-panel"></div>
-          </div>
-        </div>
-        <div class="filter-row">
-          <label>Request type</label>
-          <div class="dd-filter" id="filter-request-type-wrap">
-            <button class="dd-trigger" id="filter-request-type-trigger">All types</button>
-            <div class="dd-panel" id="filter-request-type-panel"></div>
-          </div>
-        </div>
-        <div class="filter-row">
-          <label>Project</label>
-          <div class="dd-filter" id="filter-project-wrap">
-            <button class="dd-trigger" id="filter-project-trigger">All projects</button>
-            <div class="dd-panel" id="filter-project-panel"></div>
-          </div>
-        </div>
-        <div class="filter-row">
-          <label>Visitor type</label>
-          <div class="dd-filter" id="filter-visitor-type-wrap">
-            <button class="dd-trigger" id="filter-visitor-type-trigger">All visitor types</button>
-            <div class="dd-panel" id="filter-visitor-type-panel"></div>
-          </div>
-        </div>
-        <div class="filter-row">
-          <label>Language</label>
-          <div class="dd-filter" id="filter-language-wrap">
-            <button class="dd-trigger" id="filter-language-trigger">All languages</button>
-            <div class="dd-panel" id="filter-language-panel"></div>
-          </div>
-        </div>
-        <div class="filter-row">
-          <label>Validated</label>
-          <select id="filter-validation">
-            <option value="">All</option>
-            <option value="true">Yes</option>
-            <option value="false">No</option>
-          </select>
-        </div>
-        <div class="filter-row">
-          <label>WhatsApp</label>
-          <select id="filter-whatsapp">
-            <option value="">All</option>
-            <option value="true">Yes</option>
-            <option value="false">No</option>
-          </select>
-        </div>
-        <div class="filter-row filter-row-entities">
-          <label>Has lead</label>
-          <select id="filter-has-lead">
-            <option value="">All</option>
-            <option value="true">Yes</option>
-            <option value="false">No</option>
-          </select>
-          <label>Has case</label>
-          <select id="filter-has-case">
-            <option value="">All</option>
-            <option value="true">Yes</option>
-            <option value="false">No</option>
-          </select>
-          <label>Has booking</label>
-          <select id="filter-has-booking">
-            <option value="">All</option>
-            <option value="true">Yes</option>
-            <option value="false">No</option>
-          </select>
-        </div>
-        <div class="filter-row">
-          <label>Sort by</label>
-          <select id="filter-sort">
-            <option value="newest">Newest first</option>
-            <option value="oldest">Oldest first</option>
-            <option value="most-msgs">Most messages</option>
-            <option value="least-msgs">Fewest messages</option>
-          </select>
-        </div>
-        <div class="filter-row">
-          <label>Reviewed</label>
-          <select id="filter-reviewed">
-            <option value="all">All sessions</option>
-            <option value="unreviewed">Unreviewed only</option>
-            <option value="reviewed">Reviewed only</option>
-          </select>
-        </div>
-        <div id="filter-date-warning" class="filter-date-warning" style="display:none">Date range must not exceed 3 days.</div>
-        <div class="filter-actions-row">
-          <button class="filter-apply-btn" id="filter-apply">Apply Filters</button>
-          <button class="filter-clear-btn" id="filter-clear">Clear Filters</button>
-        </div>
+          <div class="filter-popover-overlay" id="filter-popover-overlay"></div>
       </div>
-      <div class="session-info-bar">
-        <span class="session-count" id="session-count" aria-live="polite"></span>
-        <span class="time-gate" id="time-gate"></span>
+      <div class="top-nav-right">
+        <select class="env-switcher" id="env-switcher"></select>
+        <span class="live-badge" id="live-badge"><span class="live-dot"></span>Live</span>
+        <button class="disconnect-btn" id="refresh-btn" aria-label="Refresh sessions">Refresh</button>
       </div>
-      <ul class="session-list" id="session-list"></ul>
     </div>
 
-    <!-- Chat Area (header + main) -->
-    <div class="chat-area">
-      <div class="chat-header" id="chat-header-bar">
-        <div class="chat-session-controls" id="chat-session-controls"></div>
-        <div class="chat-header-right">
-          <button class="disconnect-btn" id="refresh-btn" aria-label="Refresh sessions">Refresh</button>
+    <!-- Active filter tags -->
+    <div class="filter-tags-bar" id="filter-tags-bar"></div>
+
+    <!-- Content: Sidebar + Chat -->
+    <div class="content-area">
+      <div class="sidebar" id="sidebar">
+        <div class="session-info-bar">
+          <span class="session-count" id="session-count" aria-live="polite"></span>
+          <span class="time-gate" id="time-gate"></span>
         </div>
+        <ul class="session-list" id="session-list"></ul>
       </div>
-      <div class="chat-main" id="chat-main">
-        <div class="chat-empty" id="chat-empty">
-          Select a session to view the conversation
+
+      <!-- Chat Area (header + main) -->
+      <div class="chat-area">
+        <div class="chat-header" id="chat-header-bar">
+          <div class="chat-session-controls" id="chat-session-controls"></div>
+          <div class="chat-header-right"></div>
+        </div>
+        <div class="chat-main" id="chat-main">
+          <div class="chat-empty" id="chat-empty">
+            Select a session to view the conversation
+          </div>
         </div>
       </div>
     </div>
@@ -1720,7 +1906,7 @@
   </script>
   <!-- config.js is gitignored; its absence is fine — the app falls back to manual entry -->
   <script src="config.js" onerror="console.info('config.js not found — using manual credential entry.');"></script>
-  <script src="app.js?v=43"
+  <script src="app.js?v=50"
           onerror="document.getElementById('login-error').style.display='block'; document.getElementById('login-error').textContent='Failed to load app.js.';">
   </script>
 </body>

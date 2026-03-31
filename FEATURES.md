@@ -24,34 +24,34 @@ Update this file whenever a feature is added, changed, or completed.
 - [x] Login card shows the Google sign-in button, an error area, and the optional environment selector (no credential fields, no status log)
 
 ### Navigation & Header
+- [x] **Top navigation bar** — horizontal bar containing burger menu, search input, filter button, env switcher, Live badge, and Refresh button
 - [x] Permanent chat header bar (`#chat-header-bar`) outside `#chat-main`, always visible after login
-- [x] Right side of chat header: Refresh button — always present
 - [x] Left side of chat header (`#chat-session-controls`): session-specific controls populated when a session is selected:
   - Mark Reviewed / Reviewed ✓ toggle button
   - Feedback button
-  - Session ID
   - Total message count
   - Type-count pills (human / ai / tool / system)
-- [x] **Burger menu** (☰) in sidebar header with dropdown containing:
+  - Visitor settings badges (project, visitor type, language, WhatsApp, validated, lead/case/booking)
+- [x] **Burger menu** (☰) in top nav with dropdown containing:
   - Signed-in user email and role badge (Admin / User)
   - Users item — opens admin settings modal
   - Invite item (visible to admins only) — opens admin settings modal
   - Logout — signs out and returns to login screen
-- [x] Pulsing `• Live` badge shown next to burger menu in sidebar header
+- [x] Pulsing `• Live` badge shown in top nav bar
 
 ### Session List
 - [x] **Lazy-loading architecture** — default load: 50 most recent sessions via `get_session_list` RPC (two-stage: fast GROUP BY for IDs, then JSONB metadata extraction)
 - [x] **Infinite scroll** — scrolling to the bottom of the session list loads 10 more sessions per batch
 - [x] Sessions grouped by `session_id`, sorted by selected sort order
-- [x] Each session shows: ID, total message count, latest date, type-count pills, metadata badges
+- [x] Each session shows: ID (with copy button on hover), total message count, latest date, type-count pills, AI conversation badges
 - [x] Type-count pills: human / ai / tool / system message counts per session
-- [x] Metadata badges per session: request category, request type, `verified`, `end`, `reviewed` flags
+- [x] AI conversation badges per session: request category, request type, `verified`, `end`, `reviewed` flags (visitor settings badges shown in chat header only)
 - [x] Refresh button reloads sessions (respects active filters)
 - [x] Realtime updates: new messages and sessions appear automatically via Supabase Realtime (INSERT events)
 - [x] Pulsing `• Live` badge shown in sidebar header when Realtime channel is active (`SUBSCRIBED`)
 - [x] Filters and sort order preserved across realtime updates and manual refreshes
 - [x] **Time gate** — session info bar shows the time range (last-activity based) of currently loaded sessions
-- [x] **Environment switcher** — dropdown in sidebar header allows switching environments without returning to login
+- [x] **Environment switcher** — dropdown in top nav allows switching environments without returning to login
 
 ### Mark as Reviewed
 - [x] "Mark Reviewed" button in the chat header toggles reviewed state for the open session
@@ -79,7 +79,8 @@ Update this file whenever a feature is added, changed, or completed.
 - [x] **Clear Filters** button resets all filter inputs and reloads default 50 sessions
 - [x] Filter inputs persist after Apply (only cleared on Clear Filters)
 - [x] Session count shown ("N sessions+" or "N sessions found" when filters active)
-- [x] Collapsible filter panel (toggle open/closed)
+- [x] **Filter popover** — Notion-style filter button in top nav opens a fixed-position popover with all filters organized into labeled groups (Session, AI Response, Visitor, CRM); Apply closes the popover
+- [x] **Active filter tags** — horizontal strip below top nav shows dismissable tags for each active filter condition; removing a tag re-applies filters; "Clear all" removes everything; filter button turns green when filters are active
 - [x] Custom dropdown+checklist UI for tools, category, and request type:
   - Trigger button label updates to show count of selected items (e.g. "Tools (2)")
   - Clicking outside any open dropdown closes it; opening one closes the others
@@ -112,8 +113,8 @@ Update this file whenever a feature is added, changed, or completed.
 
 ### Visitor Settings Integration
 - [x] **Session enrichment** — `get_session_list` LEFT JOINs `visitors_settings` (via `session_id`) to enrich sessions with project, visitor type, language, validation, WhatsApp channel, lead/case/booking presence, request ID, and masked phone
-- [x] **Visitor badges in session list** — project (indigo), visitor type (pink), language (lime), WhatsApp (teal), validated (teal), lead/case/booking entity (purple)
-- [x] **Visitor info in chat header** — project, type, language, WhatsApp, validation, lead/case/booking, phone, request ID shown as badges when session is selected
+- [x] **Visitor badges in chat header** — project (indigo), visitor type (pink), language (lime), WhatsApp (teal), validated (teal), lead/case/booking entity (purple) shown in chat header when session is selected
+- [x] **Badge separation** — visitor settings badges shown only in chat header; AI conversation badges (categories, request types) shown only in session list items
 - [x] **Visitor settings filters** — server-side filters for project, visitor type, language (multi-select dropdown checklists, OR logic), validation, WhatsApp (boolean select), has lead/case/booking (boolean select)
 - [x] **Filter options populated from `get_filter_options`** — projects, visitor types, languages scoped to last 7 days
 
@@ -122,11 +123,11 @@ Update this file whenever a feature is added, changed, or completed.
 - [x] CSS design tokens: shadow scale (`--shadow-sm` to `--shadow-xl`), radius scale (`--radius-sm` to `--radius-full`), z-index layers (`--z-sidebar` to `--z-modal`)
 - [x] Responsive layout: sidebar overlays at ≤768px
 - [x] Collapsible tool call / tool result details (`<details>` element)
-- [x] Cache-busting query param on `app.js` (`?v=43`) — increment when deploying
+- [x] Cache-busting query param on `app.js` (`?v=50`) — increment when deploying
 - [x] Loading overlay during session load and filter apply
 - [x] "Searching..." indicator in session list during server-side search
 - [x] **Empty states** — "No sessions found" or "No sessions match your filters" with Clear Filters action link
-- [x] **Copy session ID** — click session ID in chat header to copy to clipboard; visual "Copied!" feedback
+- [x] **Copy session ID** — hover over session ID in session list to reveal copy button; click copies to clipboard with visual feedback (✓)
 - [x] **Shareable session URLs** — `?session=<id>` URL param; auto-selects session on load; updated via `history.replaceState`
 - [x] **Session ID overflow** — long session IDs truncated with ellipsis in sidebar
 - [x] Global JS error handler shows errors in the browser console
