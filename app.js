@@ -1129,6 +1129,9 @@ function buildSessionBadgesHtml(session) {
   if (reviewedSessions.has(session.id)) {
     badges.push('<span class="badge reviewed-badge">reviewed</span>');
   }
+  // Visitor settings: project and type only
+  if (session.project) badges.push(`<span class="badge badge-project">${escapeHtml(session.project)}</span>`);
+  if (session.visitorType) badges.push(`<span class="badge badge-visitor-type">${escapeHtml(session.visitorType)}</span>`);
   // AI metadata badges only (conversation data)
   for (const cat of session.categories) {
     badges.push(`<span class="badge">${escapeHtml(cat)}</span>`);

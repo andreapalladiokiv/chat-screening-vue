@@ -113,7 +113,7 @@ Update this file whenever a feature is added, changed, or completed.
 ### Visitor Settings Integration
 - [x] **Session enrichment** — `get_session_list` LEFT JOINs `visitors_settings` (via `session_id`) to enrich sessions with project, visitor type, language, validation, WhatsApp channel, lead/case/booking presence, request ID, and masked phone
 - [x] **Visitor badges in chat header** — project (indigo), visitor type (pink), language (lime), WhatsApp (teal), validated (teal), lead/case/booking entity (purple) shown in chat header when session is selected
-- [x] **Badge separation** — visitor settings badges shown only in chat header; AI conversation badges (categories, request types) shown only in session list items
+- [x] **Badge separation** — full visitor settings badges shown in chat header; project and visitor type also shown in session list items; AI conversation badges (categories, request types) shown only in session list items
 - [x] **Visitor settings filters** — server-side filters for project, visitor type, language (multi-select dropdown checklists, OR logic), validation, WhatsApp (boolean select), has lead/case/booking (boolean select)
 - [x] **Filter options populated from `get_filter_options`** — AI metadata (tools, categories, types) scoped to last 3 days; visitor options (projects, visitor types, languages) queried directly from `visitors_settings`. Retries once on timeout.
 

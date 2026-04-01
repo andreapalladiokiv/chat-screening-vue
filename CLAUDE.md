@@ -279,7 +279,7 @@ The Edge Function:
 - **Status log** — `logStatus()` is a no-op that writes to `console.log` only; the visible status log was removed from the login UI
 - **Environment switcher** — dropdown in the top nav bar (near Live badge) allows switching environments without logging out; triggers sign-out, re-auth with the new project's OAuth
 - **Time gate** — shows the time range (last-activity based) of currently loaded sessions in the session info bar
-- **Badge separation** — visitor settings badges (project, visitor type, language, WhatsApp, validated, lead/case/booking) shown only in chat header; AI conversation badges (categories, request types, verified, end) shown only in session list items. Chat header shows message count but no type pills (human/ai/tool/system).
+- **Badge separation** — visitor settings badges (project, visitor type, language, WhatsApp, validated, lead/case/booking) shown in chat header; project and visitor type also shown in session list items; AI conversation badges (categories, request types, verified, end) shown only in session list items. Chat header shows message count but no type pills (human/ai/tool/system).
 
 ### CSS (index.html)
 
