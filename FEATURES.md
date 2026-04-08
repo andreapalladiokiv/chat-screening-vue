@@ -68,7 +68,7 @@ Update this file whenever a feature is added, changed, or completed.
 ### Filtering & Search
 - [x] **Server-side session ID search** — searches the entire `chat_messages` database via ILIKE; debounced at 400ms with "Searching..." indicator; returns up to 50 matches
 - [x] **"Apply Filters" button** — server-side filters (date, tools, categories, request types, message count) applied on click via RPC
-- [x] Date range filter (from/to) — max 3-day gap enforced with warning; auto-fills last 3 days if not specified
+- [x] Datetime range filter (from/to) — `datetime-local` inputs for time-precise filtering; max 3-day gap enforced with warning; auto-fills last 3 days if not specified
 - [x] Message count filter (min/max), inclusive
 - [x] Tools filter: multi-select dropdown+checklist, AND logic (session must use ALL selected tools)
 - [x] Category filter: multi-select dropdown+checklist, OR logic (session matches any selected category)
@@ -115,7 +115,7 @@ Update this file whenever a feature is added, changed, or completed.
 - [x] **Visitor badges in chat header** — project (indigo), visitor type (pink), language (lime), WhatsApp (teal), validated (teal), lead/case/booking entity (purple) shown in chat header when session is selected
 - [x] **Badge separation** — full visitor settings badges shown in chat header; project and visitor type also shown in session list items; AI conversation badges (categories, request types) shown only in session list items
 - [x] **Visitor settings filters** — server-side filters for project, visitor type, language (multi-select dropdown checklists, OR logic), validation, WhatsApp (boolean select), has lead/case/booking (boolean select)
-- [x] **Filter options populated from `get_filter_options`** — AI metadata (tools, categories, types) scoped to last 3 days; visitor options (projects, visitor types, languages) queried directly from `visitors_settings`. Retries once on timeout.
+- [x] **Filter options from `config.js`** — tools, categories, request types, projects, visitor types, and languages defined per environment in `filterOptions`; loaded instantly at login with no RPC call
 
 ### UI / UX
 - [x] WhatsApp-inspired design with CSS custom properties for theming
@@ -140,6 +140,11 @@ Update this file whenever a feature is added, changed, or completed.
 - [x] **Keyboard navigation** — Escape closes all modals and dropdowns; arrow keys navigate session list; session items are tabbable (`tabIndex=0`)
 
 ### Performance
+- [x] **Targeted realtime DOM updates** — incoming messages update only the affected session `<li>` in-place (meta text, type pills, badges) and move it to top, instead of clearing and rebuilding the entire session list
+- [x] **Session Map** — O(1) session lookups via `Map` keyed by session ID, replacing O(n) `Array.find()` calls
+- [x] **No dynamic filter rebuild** — filter dropdown options loaded from `config.js` at login; realtime messages never trigger dropdown DOM rebuilds
+- [x] **Debounced client-side filters** — checkbox toggles, sort, and reviewed filter changes debounced at 150ms to batch rapid changes into a single render
+- [x] **Targeted session selection highlight** — clicking a session toggles the `.active` CSS class on two `<li>` elements instead of rebuilding the full list
 - [x] **DocumentFragment rendering** — session list built via `DocumentFragment` for single DOM append instead of N individual mutations
 - [x] **Tabbable session items** — `tabIndex=0` + `data-session-id` on each `<li>` for keyboard navigation
 

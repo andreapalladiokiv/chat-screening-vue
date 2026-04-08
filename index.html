@@ -296,6 +296,7 @@
     }
     .filter-cell select,
     .filter-cell input[type="date"],
+    .filter-cell input[type="datetime-local"],
     .filter-cell input[type="number"] {
       padding: 6px 8px;
       border: 1px solid var(--border);
@@ -305,7 +306,8 @@
       background: #fff;
       min-width: 0;
     }
-    .filter-cell input[type="date"] { width: 140px; }
+    .filter-cell input[type="date"],
+    .filter-cell input[type="datetime-local"] { width: 180px; }
     .filter-cell input[type="number"] { width: 72px; }
     .filter-cell select { min-width: 110px; }
     .filter-cell select:focus,
@@ -1645,11 +1647,11 @@
               <div class="filter-group-fields">
                 <div class="filter-cell">
                   <label>Date from</label>
-                  <input type="date" id="filter-date-from">
+                  <input type="datetime-local" id="filter-date-from">
                 </div>
                 <div class="filter-cell">
                   <label>Date to</label>
-                  <input type="date" id="filter-date-to">
+                  <input type="datetime-local" id="filter-date-to">
                 </div>
                 <div class="filter-cell">
                   <label>Msg min</label>
@@ -1907,7 +1909,7 @@
   </script>
   <!-- config.js is gitignored; its absence is fine — the app falls back to manual entry -->
   <script src="config.js" onerror="console.info('config.js not found — using manual credential entry.');"></script>
-  <script src="app.js?v=51"
+  <script src="app.js?v=52"
           onerror="document.getElementById('login-error').style.display='block'; document.getElementById('login-error').textContent='Failed to load app.js.';">
   </script>
 </body>

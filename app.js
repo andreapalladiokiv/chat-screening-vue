@@ -1,6 +1,7 @@
 // ── State ──
 let db = null;
 let allSessions = [];
+let sessionMap = new Map(); // O(1) session lookup by id
 let allToolNames = []; // unique tool names across all sessions
 let allCategories = []; // unique request categories
 let allRequestTypes = []; // unique request types
@@ -19,6 +20,7 @@ let filtersApplied = false;  // true when server-side filters are active
 let currentFilterParams = null; // stored RPC params when filters are applied (for loadMore)
 let searchResults = null;       // non-null when server-side session_id search is active
 let searchDebounceTimer = null; // debounce timer for search input
+let renderDebounceTimer = null; // debounce timer for client-side filter changes
 
 // ── DOM Elements ──
 const loginPanel = document.getElementById('login-panel');
@@ -105,6 +107,32 @@ let currentUserRole = null; // 'user' | 'admin' | null
 
 console.log('[app.js] Script loaded. Supabase available:', !!(window.supabase && window.supabase.createClient));
 
+// ── Helpers ──
+function rebuildSessionMap() {
+  sessionMap = new Map();
+  for (const s of allSessions) sessionMap.set(s.id, s);
+}
+
+function debouncedRender() {
+  clearTimeout(renderDebounceTimer);
+  renderDebounceTimer = setTimeout(() => {
+    renderSessionList();
+    renderFilterTags();
+  }, 150);
+}
+
+function loadFilterOptionsFromConfig() {
+  const savedEnvIdx = parseInt(localStorage.getItem('sb_selected_env') || '0', 10);
+  const activeEnv = environments[savedEnvIdx] || environments[0] || {};
+  const opts = activeEnv.filterOptions || {};
+  allToolNames = (opts.tools || []).slice().sort();
+  allCategories = (opts.categories || []).slice().sort();
+  allRequestTypes = (opts.requestTypes || []).slice().sort();
+  allProjects = (opts.projects || []).slice().sort();
+  allVisitorTypes = (opts.visitorTypes || []).slice().sort();
+  allLanguages = (opts.languages || []).slice().sort();
+}
+
 // ── Init ──
 (async function init() {
   connectBtn.addEventListener('click', handleGoogleSignIn);
@@ -123,9 +151,9 @@ console.log('[app.js] Script loaded. Supabase available:', !!(window.supabase &&
   // Date inputs validate the 3-day gap on change (for warning display)
   filterDateFrom.addEventListener('change', validateDateRange);
   filterDateTo.addEventListener('change', validateDateRange);
-  // Sort and reviewed are client-side only — instant re-render
-  filterSort.addEventListener('change', () => { renderSessionList(); renderFilterTags(); });
-  filterReviewed.addEventListener('change', () => { renderSessionList(); renderFilterTags(); });
+  // Sort and reviewed are client-side only — debounced re-render
+  filterSort.addEventListener('change', debouncedRender);
+  filterReviewed.addEventListener('change', debouncedRender);
   // Apply / Clear buttons
   filterApply.addEventListener('click', async () => { await applyFilters(); closeFilterPopover(); renderFilterTags(); });
 
@@ -368,11 +396,10 @@ async function afterAuthSuccess(user) {
     logStatus('Loading sessions...');
     loadingOverlay.style.display = 'flex';
 
-    // Fetch filter options (tools, categories, request types) in parallel with default sessions
-    const [filterOpts, sessionsOk] = await Promise.all([
-      loadFilterOptions(),
-      loadDefaultSessions(),
-    ]);
+    // Load filter options from config.js (instant, no RPC)
+    loadFilterOptionsFromConfig();
+
+    const sessionsOk = await loadDefaultSessions();
 
     if (!sessionsOk) {
       logStatus('Failed to load sessions. Staying on login screen.');
@@ -422,6 +449,7 @@ async function handleLogout() {
   currentUser = null;
   currentUserRole = null;
   allSessions = [];
+  sessionMap = new Map();
   currentSessionId = null;
   reviewedSessions = new Set();
   sessionCursor = null;
@@ -456,8 +484,7 @@ async function handleRefresh() {
   refreshBtn.textContent = 'Refreshing...';
   sessionCount.textContent = 'Refreshing sessions...';
 
-  // Refresh filter options and re-run current view (default or filtered)
-  await loadFilterOptions();
+  // Re-run current view (default or filtered)
   if (filtersApplied && currentFilterParams) {
     await applyFilters();
   } else {
@@ -470,7 +497,7 @@ async function handleRefresh() {
       updateTimeGate();
       // Auto-select session from URL ?session=<id> (shareable links)
       const urlSession = new URL(window.location).searchParams.get('session');
-      if (urlSession && allSessions.some(s => s.id === urlSession)) {
+      if (urlSession && sessionMap.has(urlSession)) {
         selectSession(urlSession);
       }
     } else {
@@ -483,16 +510,27 @@ async function handleRefresh() {
 }
 
 // ── Realtime ──
+let realtimeRetryTimer = null;
+
 function subscribeRealtime() {
   if (!db || realtimeChannel) return;
+  clearTimeout(realtimeRetryTimer);
   realtimeChannel = db.channel('chat-realtime')
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, handleRealtimeInsert)
     .subscribe((status) => {
+      console.log('[realtime] Channel status:', status);
       liveBadge.classList.toggle('active', status === 'SUBSCRIBED');
+      // Auto-retry on error or timeout
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        console.warn('[realtime] Channel lost, retrying in 5s...');
+        unsubscribeRealtime();
+        realtimeRetryTimer = setTimeout(subscribeRealtime, 5000);
+      }
     });
 }
 
 function unsubscribeRealtime() {
+  clearTimeout(realtimeRetryTimer);
   if (realtimeChannel && db) db.removeChannel(realtimeChannel);
   realtimeChannel = null;
   liveBadge.classList.remove('active');
@@ -506,14 +544,17 @@ function handleRealtimeInsert(payload) {
   let msg = null;
   try { msg = typeof rawMsg === 'string' ? JSON.parse(rawMsg) : rawMsg; } catch (e) {}
 
-  let session = allSessions.find((s) => s.id === sid);
+  let isNew = false;
+  let session = sessionMap.get(sid);
   if (!session) {
+    isNew = true;
     session = {
       id: sid, count: 0, latest: ts, earliest: ts,
       tools: [], typeCounts: { human: 0, ai: 0, tool: 0, system: 0 },
       categories: [], requestTypes: [], hasVerified: false, hasEndConversation: false,
     };
-    allSessions.push(session);
+    allSessions.unshift(session);
+    sessionMap.set(sid, session);
   }
 
   session.count++;
@@ -527,12 +568,10 @@ function handleRealtimeInsert(payload) {
     if (msg.tool_calls && msg.tool_calls.length) {
       for (const tc of msg.tool_calls) {
         if (tc.name && !session.tools.includes(tc.name)) session.tools.push(tc.name);
-        if (tc.name && !allToolNames.includes(tc.name)) { allToolNames.push(tc.name); allToolNames.sort(); }
       }
     }
     if (t === 'tool' && msg.name) {
       if (!session.tools.includes(msg.name)) session.tools.push(msg.name);
-      if (!allToolNames.includes(msg.name)) { allToolNames.push(msg.name); allToolNames.sort(); }
     }
 
     if (t === 'ai' && !(msg.tool_calls && msg.tool_calls.length)) {
@@ -541,46 +580,29 @@ function handleRealtimeInsert(payload) {
       if (c && c.output) {
         const { request_category: cat, request_type: rtype, identity_verified, end_conversation } = c.output;
         if (cat && !session.categories.includes(cat)) session.categories.push(cat);
-        if (cat && !allCategories.includes(cat)) { allCategories.push(cat); allCategories.sort(); }
         if (rtype && !session.requestTypes.includes(rtype)) session.requestTypes.push(rtype);
-        if (rtype && !allRequestTypes.includes(rtype)) { allRequestTypes.push(rtype); allRequestTypes.sort(); }
         if (identity_verified) session.hasVerified = true;
         if (end_conversation) session.hasEndConversation = true;
       }
     }
   }
 
-  allSessions.sort((a, b) => b.latest.localeCompare(a.latest));
-  repopulateFiltersPreservingSelection();
-  renderSessionList();
-  if (sid === currentSessionId) appendRealtimeMessage(row);
-}
+  // Move session to front of array (instead of full re-sort)
+  if (!isNew) {
+    const idx = allSessions.indexOf(session);
+    if (idx > 0) {
+      allSessions.splice(idx, 1);
+      allSessions.unshift(session);
+    }
+  }
 
-function repopulateFiltersPreservingSelection() {
-  const selTools = getCheckedValues(filterToolsPanel);
-  const selCats  = getCheckedValues(filterCategoryPanel);
-  const selTypes = getCheckedValues(filterRequestTypePanel);
-  const selProjects = getCheckedValues(filterProjectPanel);
-  const selVisitorTypes = getCheckedValues(filterVisitorTypePanel);
-  const selLanguages = getCheckedValues(filterLanguagePanel);
-  populateFilters();
-  restoreChecked(filterToolsPanel, filterToolsTrigger, selTools, 'All tools', 'Tools');
-  restoreChecked(filterCategoryPanel, filterCategoryTrigger, selCats, 'All categories', 'Category');
-  restoreChecked(filterRequestTypePanel, filterRequestTypeTrigger, selTypes, 'All types', 'Type');
-  restoreChecked(filterProjectPanel, filterProjectTrigger, selProjects, 'All projects', 'Project');
-  restoreChecked(filterVisitorTypePanel, filterVisitorTypeTrigger, selVisitorTypes, 'All visitor types', 'Visitor type');
-  restoreChecked(filterLanguagePanel, filterLanguageTrigger, selLanguages, 'All languages', 'Language');
+  // Targeted DOM update instead of full rebuild
+  updateSessionInDOM(session, isNew);
+  if (sid === currentSessionId) appendRealtimeMessage(row);
 }
 
 function getCheckedValues(panel) {
   return Array.from(panel.querySelectorAll('input[type=checkbox]:checked')).map((cb) => cb.value);
-}
-
-function restoreChecked(panel, trigger, values, defaultLabel, activePrefix) {
-  for (const cb of panel.querySelectorAll('input[type=checkbox]')) {
-    cb.checked = values.includes(cb.value);
-  }
-  updateDropdownLabel(panel, trigger, defaultLabel, activePrefix);
 }
 
 function updateDropdownLabel(panel, trigger, defaultLabel, activePrefix) {
@@ -609,11 +631,11 @@ function closeFilterPopover() {
 function renderFilterTags() {
   const tags = [];
 
-  // Date
+  // Date — format datetime-local values for display
   const dateFrom = filterDateFrom.value;
   const dateTo = filterDateTo.value;
-  if (dateFrom) tags.push({ label: 'From', value: dateFrom, clear: () => { filterDateFrom.value = ''; } });
-  if (dateTo) tags.push({ label: 'To', value: dateTo, clear: () => { filterDateTo.value = ''; } });
+  if (dateFrom) tags.push({ label: 'From', value: formatDatetimeTag(dateFrom), clear: () => { filterDateFrom.value = ''; } });
+  if (dateTo) tags.push({ label: 'To', value: formatDatetimeTag(dateTo), clear: () => { filterDateTo.value = ''; } });
 
   // Messages
   const msgMin = filterMsgMin.value;
@@ -720,43 +742,6 @@ function clearStatusLog() {
 
 // ── Sessions (RPC-based lazy loading) ──
 
-// Fetch all distinct filter options from the DB (called once at login / refresh)
-// Retries once on failure after a short delay.
-async function loadFilterOptions(retries = 1) {
-  try {
-    const rpcPromise = db.rpc('get_filter_options');
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('get_filter_options timed out')), 10000)
-    );
-    const { data, error } = await Promise.race([rpcPromise, timeoutPromise]);
-    if (error) {
-      console.warn('[filters] get_filter_options error:', error);
-      if (retries > 0) {
-        console.log('[filters] Retrying in 3s...');
-        await new Promise(r => setTimeout(r, 3000));
-        return loadFilterOptions(retries - 1);
-      }
-      return;
-    }
-    if (data) {
-      allToolNames = (data.tools || []).sort();
-      allCategories = (data.categories || []).sort();
-      allRequestTypes = (data.request_types || []).sort();
-      allProjects = (data.projects || []).sort();
-      allVisitorTypes = (data.visitor_types || []).sort();
-      allLanguages = (data.languages || []).sort();
-      if (retries < 1) populateFilters(); // repopulate after retry success
-    }
-  } catch (err) {
-    console.warn('[filters] loadFilterOptions skipped:', err.message);
-    if (retries > 0) {
-      console.log('[filters] Retrying in 3s...');
-      await new Promise(r => setTimeout(r, 3000));
-      return loadFilterOptions(retries - 1);
-    }
-  }
-}
-
 // Parse the RPC result into the allSessions format used by the rest of the app
 function parseSessionResults(rows) {
   return (rows || []).map(row => ({
@@ -800,6 +785,7 @@ async function loadDefaultSessions() {
     }
 
     allSessions = parseSessionResults(data);
+    rebuildSessionMap();
     if (allSessions.length > 0) {
       sessionCursor = allSessions[allSessions.length - 1].latest;
     }
@@ -840,6 +826,7 @@ async function loadMoreSessions() {
       noMoreSessions = true;
     } else {
       allSessions = allSessions.concat(newSessions);
+      for (const s of newSessions) sessionMap.set(s.id, s);
       sessionCursor = newSessions[newSessions.length - 1].latest;
       if (newSessions.length < 10) noMoreSessions = true;
     }
@@ -957,21 +944,24 @@ async function applyFilters() {
   }
 
   // Auto-fill date range to last 3 days if not specified
+  // datetime-local values are "YYYY-MM-DDTHH:MM", date values are "YYYY-MM-DD"
   const params = { p_limit: 50 };
   if (dateFrom) {
-    params.p_date_from = dateFrom + 'T00:00:00';
+    // datetime-local gives "YYYY-MM-DDTHH:MM"; append seconds
+    params.p_date_from = dateFrom.length > 10 ? dateFrom + ':00' : dateFrom + 'T00:00:00';
   } else {
-    // Default to 3 days ago
+    // Default to 3 days ago at midnight
     const d = new Date();
     d.setDate(d.getDate() - 3);
-    params.p_date_from = d.toISOString().slice(0, 10) + 'T00:00:00';
-    filterDateFrom.value = params.p_date_from.slice(0, 10);
+    const defaultFrom = d.toISOString().slice(0, 16); // "YYYY-MM-DDTHH:MM"
+    params.p_date_from = defaultFrom + ':00';
+    filterDateFrom.value = d.toISOString().slice(0, 10) + 'T00:00';
   }
   if (dateTo) {
-    params.p_date_to = dateTo + 'T23:59:59.999';
+    params.p_date_to = dateTo.length > 10 ? dateTo + ':59.999' : dateTo + 'T23:59:59.999';
   } else {
     params.p_date_to = new Date().toISOString();
-    filterDateTo.value = params.p_date_to.slice(0, 10);
+    filterDateTo.value = new Date().toISOString().slice(0, 16);
   }
   validateDateRange(); // re-validate after auto-fill
   if (filterApply.disabled) return;
@@ -1012,7 +1002,7 @@ async function applyFilters() {
     }
     if (allSessions.length < 50) noMoreSessions = true;
 
-    repopulateFiltersPreservingSelection();
+    rebuildSessionMap();
     renderSessionList();
     updateTimeGate();
   } catch (err) {
@@ -1040,7 +1030,7 @@ function buildDropdown(panel, trigger, items, defaultLabel, activePrefix) {
     cb.value = item;
     cb.addEventListener('change', () => {
       updateDropdownLabel(panel, trigger, defaultLabel, activePrefix);
-      renderSessionList();
+      debouncedRender();
     });
     lbl.appendChild(cb);
     lbl.appendChild(document.createTextNode(' ' + item));
@@ -1197,31 +1187,67 @@ function renderSessionList() {
 
   const frag = document.createDocumentFragment();
   for (const session of filtered) {
-    const li = document.createElement('li');
-    li.className = 'session-item' + (session.id === currentSessionId ? ' active' : '');
-    li.tabIndex = 0;
-    li.dataset.sessionId = session.id;
-    const tc = session.typeCounts;
-    const typePills = buildTypePillsHtml(tc);
-    const badgesHtml = buildSessionBadgesHtml(session);
-    li.innerHTML = `
-      <div class="session-id">${escapeHtml(session.id)}<button class="session-id-copy-btn" title="Copy session ID" data-sid="${escapeHtml(session.id)}">&#x2398;</button></div>
-      <div class="session-meta">${session.count} messages &middot; ${formatDate(session.latest)}</div>
-      <div class="type-counts">${typePills}</div>
-      ${badgesHtml}
-    `;
-    li.addEventListener('click', () => selectSession(session.id));
-    const copyBtn = li.querySelector('.session-id-copy-btn');
-    copyBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      navigator.clipboard.writeText(session.id).then(() => {
-        copyBtn.textContent = '✓';
-        setTimeout(() => { copyBtn.innerHTML = '&#x2398;'; }, 1200);
-      });
-    });
-    frag.appendChild(li);
+    frag.appendChild(createSessionLi(session));
   }
   sessionList.appendChild(frag);
+}
+
+function createSessionLi(session) {
+  const li = document.createElement('li');
+  li.className = 'session-item' + (session.id === currentSessionId ? ' active' : '');
+  li.tabIndex = 0;
+  li.dataset.sessionId = session.id;
+  const typePills = buildTypePillsHtml(session.typeCounts);
+  const badgesHtml = buildSessionBadgesHtml(session);
+  li.innerHTML = `
+    <div class="session-id">${escapeHtml(session.id)}<button class="session-id-copy-btn" title="Copy session ID" data-sid="${escapeHtml(session.id)}">&#x2398;</button></div>
+    <div class="session-meta">${session.count} messages &middot; ${formatDate(session.latest)}</div>
+    <div class="type-counts">${typePills}</div>
+    ${badgesHtml}
+  `;
+  li.addEventListener('click', () => selectSession(session.id));
+  const copyBtn = li.querySelector('.session-id-copy-btn');
+  copyBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(session.id).then(() => {
+      copyBtn.textContent = '✓';
+      setTimeout(() => { copyBtn.innerHTML = '&#x2398;'; }, 1200);
+    });
+  });
+  return li;
+}
+
+function updateSessionInDOM(session, isNew) {
+  if (isNew) {
+    const li = createSessionLi(session);
+    // Prepend for newest-first (default sort)
+    sessionList.prepend(li);
+  } else {
+    const li = sessionList.querySelector(`[data-session-id="${session.id}"]`);
+    if (!li) return; // session filtered out, nothing to update
+    // Update content in-place
+    const metaEl = li.querySelector('.session-meta');
+    if (metaEl) metaEl.textContent = `${session.count} messages \u00b7 ${formatDate(session.latest)}`;
+    const countsEl = li.querySelector('.type-counts');
+    if (countsEl) countsEl.innerHTML = buildTypePillsHtml(session.typeCounts);
+    const oldBadges = li.querySelector('.session-badges');
+    const newBadgesHtml = buildSessionBadgesHtml(session);
+    if (oldBadges) {
+      if (newBadgesHtml) { oldBadges.outerHTML = newBadgesHtml; } else { oldBadges.remove(); }
+    } else if (newBadgesHtml) {
+      li.insertAdjacentHTML('beforeend', newBadgesHtml);
+    }
+    // Move to top if sort is newest (default)
+    const sortBy = filterSort.value;
+    if (sortBy === 'newest' || sortBy === '') {
+      sessionList.prepend(li);
+    }
+  }
+
+  // Update count text
+  const sessions = searchResults !== null ? searchResults : allSessions;
+  const label = filtersApplied ? ' found' : '';
+  sessionCount.textContent = `${sessions.length} session${sessions.length !== 1 ? 's' : ''}${label}${noMoreSessions ? '' : '+'}`;
 }
 
 async function selectSession(sessionId) {
@@ -1230,7 +1256,12 @@ async function selectSession(sessionId) {
   const url = new URL(window.location);
   url.searchParams.set('session', sessionId);
   history.replaceState(null, '', url);
-  renderSessionList(); // Update active highlight
+
+  // Targeted active highlight toggle (instead of full renderSessionList)
+  const prevActive = sessionList.querySelector('.session-item.active');
+  if (prevActive) prevActive.classList.remove('active');
+  const nextActive = sessionList.querySelector(`[data-session-id="${sessionId}"]`);
+  if (nextActive) nextActive.classList.add('active');
 
   // Show loading state
   chatMain.innerHTML = '<div class="loading-messages"><div class="spinner"></div> Loading messages...</div>';
@@ -1249,7 +1280,7 @@ async function selectSession(sessionId) {
 
   // Sync sidebar counts to match the actual rows fetched (fixes mismatch when
   // loadSessions() used a date filter that excluded some older messages in this session).
-  const session = allSessions.find((s) => s.id === sessionId);
+  const session = sessionMap.get(sessionId);
   if (session && data.length !== session.count) {
     const tc = { human: 0, ai: 0, tool: 0, system: 0 };
     for (const row of data) {
@@ -1261,7 +1292,7 @@ async function selectSession(sessionId) {
     }
     session.count = data.length;
     session.typeCounts = tc;
-    renderSessionList();
+    updateSessionInDOM(session, false);
   }
 
   renderMessages(data, sessionId);
@@ -1383,7 +1414,7 @@ function renderMessages(rows, sessionId) {
   // Chat header — update permanent session controls bar
   const isReviewed = reviewedSessions.has(sessionId);
   const sessionControls = document.getElementById('chat-session-controls');
-  const session = allSessions.find((s) => s.id === sessionId);
+  const session = sessionMap.get(sessionId);
   const visitorInfoHtml = buildVisitorInfoHtml(session);
   sessionControls.innerHTML = `
     <button class="chat-reviewed-btn${isReviewed ? ' reviewed-active' : ''}" id="chat-reviewed-btn">${isReviewed ? 'Reviewed ✓' : 'Mark Reviewed'}</button>
@@ -1501,7 +1532,7 @@ function appendRealtimeMessage(row) {
   container.scrollTop = container.scrollHeight;
 
   // Update header message count and type pills
-  const session = allSessions.find((s) => s.id === currentSessionId);
+  const session = sessionMap.get(currentSessionId);
   const sessionControls = document.getElementById('chat-session-controls');
   const metaEl = sessionControls && sessionControls.querySelector('.meta-info');
   if (metaEl && session) metaEl.textContent = session.count + ' messages';
@@ -1773,6 +1804,7 @@ async function handleEnvSwitch() {
   currentUser = null;
   currentUserRole = null;
   allSessions = [];
+  sessionMap = new Map();
   currentSessionId = null;
   sessionCursor = null;
   filtersApplied = false;
@@ -1834,6 +1866,18 @@ function formatTime(isoStr) {
     second: '2-digit',
     timeZone: TIME_ZONE,
   });
+}
+
+function formatDatetimeTag(val) {
+  if (!val) return '';
+  // datetime-local values are "YYYY-MM-DDTHH:MM", date values are "YYYY-MM-DD"
+  const d = new Date(val);
+  if (isNaN(d)) return val;
+  if (val.length <= 10) {
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ', ' +
+    d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
 }
 
 // ── User Roles ──
