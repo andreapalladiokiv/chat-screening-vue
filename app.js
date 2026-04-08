@@ -131,6 +131,34 @@ function loadFilterOptionsFromConfig() {
   allProjects = (opts.projects || []).slice().sort();
   allVisitorTypes = (opts.visitorTypes || []).slice().sort();
   allLanguages = (opts.languages || []).slice().sort();
+  // Return true if at least one filter list has values
+  return allToolNames.length > 0 || allCategories.length > 0 || allRequestTypes.length > 0
+    || allProjects.length > 0 || allVisitorTypes.length > 0 || allLanguages.length > 0;
+}
+
+// Fallback: fetch filter options from DB when config.js has none
+async function loadFilterOptionsFromRPC() {
+  try {
+    const rpcPromise = db.rpc('get_filter_options');
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('get_filter_options timed out')), 10000)
+    );
+    const { data, error } = await Promise.race([rpcPromise, timeoutPromise]);
+    if (error) {
+      console.warn('[filters] get_filter_options error:', error);
+      return;
+    }
+    if (data) {
+      allToolNames = (data.tools || []).sort();
+      allCategories = (data.categories || []).sort();
+      allRequestTypes = (data.request_types || []).sort();
+      allProjects = (data.projects || []).sort();
+      allVisitorTypes = (data.visitor_types || []).sort();
+      allLanguages = (data.languages || []).sort();
+    }
+  } catch (err) {
+    console.warn('[filters] loadFilterOptionsFromRPC skipped:', err.message);
+  }
 }
 
 // ── Init ──
@@ -282,10 +310,15 @@ function loadFilterOptionsFromConfig() {
 
   if (projectId && key && window.supabase && window.supabase.createClient) {
     initSupabaseClient(projectId, key);
-    const { data: { session } } = await db.auth.getSession();
-    if (session && session.user) {
-      await afterAuthSuccess(session.user);
-      return;
+    try {
+      const { data: { session } } = await db.auth.getSession();
+      if (session && session.user) {
+        await afterAuthSuccess(session.user);
+        return;
+      }
+    } catch (err) {
+      console.warn('[auth] Failed to restore session:', err.message);
+      // Fall through to show login panel
     }
   }
 
@@ -396,10 +429,11 @@ async function afterAuthSuccess(user) {
     logStatus('Loading sessions...');
     loadingOverlay.style.display = 'flex';
 
-    // Load filter options from config.js (instant, no RPC)
-    loadFilterOptionsFromConfig();
-
-    const sessionsOk = await loadDefaultSessions();
+    // Load filter options: prefer config.js, fall back to RPC if empty
+    const hasConfigFilters = loadFilterOptionsFromConfig();
+    const sessionsPromise = loadDefaultSessions();
+    if (!hasConfigFilters) await loadFilterOptionsFromRPC();
+    const sessionsOk = await sessionsPromise;
 
     if (!sessionsOk) {
       logStatus('Failed to load sessions. Staying on login screen.');
@@ -427,7 +461,9 @@ async function afterAuthSuccess(user) {
     subscribeRealtime();
   } catch (err) {
     logStatus('FAILED: ' + (err.message || String(err)));
-    showLoginError('Connection failed: ' + (err.message || 'Check your credentials.'));
+    const msg = err.message || String(err);
+    const hint = msg.includes('timed out') ? ' The server may be slow — try again.' : '';
+    showLoginError('Connection failed: ' + msg + hint);
     db = null;
     currentUser = null;
   } finally {
@@ -483,6 +519,10 @@ async function handleRefresh() {
   refreshBtn.disabled = true;
   refreshBtn.textContent = 'Refreshing...';
   sessionCount.textContent = 'Refreshing sessions...';
+
+  // Refresh filter options (RPC fallback if config is empty)
+  const hasConfigFilters = loadFilterOptionsFromConfig();
+  if (!hasConfigFilters) await loadFilterOptionsFromRPC();
 
   // Re-run current view (default or filtered)
   if (filtersApplied && currentFilterParams) {
