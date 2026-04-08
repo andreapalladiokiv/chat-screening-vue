@@ -46,7 +46,7 @@ Update this file whenever a feature is added, changed, or completed.
 - [x] Type-count pills: human / ai / tool / system message counts per session
 - [x] AI conversation badges per session: request category, request type, `verified`, `end`, `reviewed` flags (visitor settings badges shown in chat header only)
 - [x] Refresh button reloads sessions (respects active filters)
-- [x] Realtime updates: new messages and sessions appear automatically via Supabase Realtime (INSERT events)
+- [x] Realtime updates: new messages and sessions appear automatically via Supabase Realtime (INSERT events); auto-reconnects on `CHANNEL_ERROR` / `TIMED_OUT` with 5s retry
 - [x] Pulsing `• Live` badge shown in sidebar header when Realtime channel is active (`SUBSCRIBED`)
 - [x] Filters and sort order preserved across realtime updates and manual refreshes
 - [x] **Time gate** — session info bar shows the time range (last-activity based) of currently loaded sessions

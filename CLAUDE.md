@@ -357,7 +357,7 @@ Reviewed state is managed client-side (no database writes):
 
 1. **Edge function slug**: The file is `supabase/functions/chat-feedback/` and the frontend calls `db.functions.invoke('chat-feedback', ...)`. The deployed Supabase slug must match — if you redeploy under a different name, update the `invoke` call in `submitFeedback()` (`app.js`) accordingly.
 
-2. **Cache-busting**: `app.js` is loaded as `app.js?v=42`. Increment the version number when deploying updated `app.js` to avoid browsers serving stale cached versions. Forgetting this has caused runtime errors when HTML and JS are out of sync (e.g. removing a DOM element that old JS still references).
+2. **Cache-busting**: `app.js` is loaded as `app.js?v=52`. Increment the version number when deploying updated `app.js` to avoid browsers serving stale cached versions. Forgetting this has caused runtime errors when HTML and JS are out of sync (e.g. removing a DOM element that old JS still references).
 
 3. **config.js is required**: The login UI has no manual credential input fields. If `config.js` is absent and no credentials are saved in `localStorage`, the Google sign-in button will display an error. Always deploy `config.js` alongside `index.html`. Use the multi-env `environments` array format to expose a named dropdown for multiple Supabase projects.
 
@@ -376,6 +376,12 @@ Reviewed state is managed client-side (no database writes):
 10. **Recursive RLS policies cause 500 errors**: An RLS policy on `chat_view_user_roles` that itself queries `chat_view_user_roles` (e.g., "Admins manage roles") causes PostgreSQL error `42P17: infinite recursion detected`. Only the simple `auth.uid() = user_id` SELECT policy should exist.
 
 11. **`visitors_settings` index required for large datasets**: Without `idx_visitors_settings_session_id`, the `get_filter_options` RPC times out (error `57014`) on environments with large `visitors_settings` tables. Run `add_visitors_settings_index.sql` on every environment.
+
+12. **`safe_jsonb` function must be deployed before RPCs**: Both `get_session_list` and `get_filter_options` depend on the `safe_jsonb(text)` helper function. If it is missing, both RPCs return 500 errors and the app shows no filter options and broken infinite scroll. Run `create_session_rpc.sql` (which defines `safe_jsonb`) on every environment before using the app.
+
+13. **Supabase Realtime requires publication + RLS**: For live sidebar updates, `chat_messages` must be added to the `supabase_realtime` publication **and** have a SELECT RLS policy for `authenticated` users. The publication can be checked with `SELECT * FROM pg_publication_tables WHERE pubname = 'supabase_realtime'`. Without both, the WebSocket connects (Live badge turns green) but no events are delivered.
+
+14. **Filter options: config.js with RPC fallback**: Filter dropdown values (tools, categories, request types, projects, visitor types, languages) are read from `config.js` `filterOptions` per environment. If `filterOptions` is empty or missing, the app falls back to the `get_filter_options` RPC. Populate `config.js` for instant filter loading; leave empty to use the RPC.
 
 ## Development Workflow
 
