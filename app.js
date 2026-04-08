@@ -310,10 +310,15 @@ async function loadFilterOptionsFromRPC() {
 
   if (projectId && key && window.supabase && window.supabase.createClient) {
     initSupabaseClient(projectId, key);
-    const { data: { session } } = await db.auth.getSession();
-    if (session && session.user) {
-      await afterAuthSuccess(session.user);
-      return;
+    try {
+      const { data: { session } } = await db.auth.getSession();
+      if (session && session.user) {
+        await afterAuthSuccess(session.user);
+        return;
+      }
+    } catch (err) {
+      console.warn('[auth] Failed to restore session:', err.message);
+      // Fall through to show login panel
     }
   }
 
@@ -456,7 +461,9 @@ async function afterAuthSuccess(user) {
     subscribeRealtime();
   } catch (err) {
     logStatus('FAILED: ' + (err.message || String(err)));
-    showLoginError('Connection failed: ' + (err.message || 'Check your credentials.'));
+    const msg = err.message || String(err);
+    const hint = msg.includes('timed out') ? ' The server may be slow — try again.' : '';
+    showLoginError('Connection failed: ' + msg + hint);
     db = null;
     currentUser = null;
   } finally {
