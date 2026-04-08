@@ -82,28 +82,13 @@ window.CHAT_VIEW_CONFIG = {
 // Multi-environment format — shows a named dropdown on the login screen
 window.CHAT_VIEW_CONFIG = {
   environments: [
-    {
-      name: 'Staging',    projectId: 'staging-id',    anonKey: 'staging-key',    allowedDomains: [],
-      filterOptions: {
-        tools: ['tool_a', 'tool_b'],
-        categories: ['Support', 'Sales'],
-        requestTypes: ['Booking', 'Cancellation'],
-        projects: ['ProjectA'],
-        visitorTypes: ['Guest', 'Member'],
-        languages: ['en', 'ro'],
-      },
-    },
-    {
-      name: 'Production', projectId: 'prod-id',       anonKey: 'prod-key',       allowedDomains: ['yourcompany.com'],
-      filterOptions: { tools: [], categories: [], requestTypes: [], projects: [], visitorTypes: [], languages: [] },
-    },
+    { name: 'Staging',    projectId: 'staging-id',    anonKey: 'staging-key',    allowedDomains: [] },
+    { name: 'Production', projectId: 'prod-id',       anonKey: 'prod-key',       allowedDomains: ['yourcompany.com'] },
   ]
 };
 ```
 
 When `environments` has 2+ entries, an **"Environment"** `<select>` dropdown appears on the login card above the Google sign-in button. With only 1 entry (or the single-env format), the dropdown is hidden.
-
-**Filter options** are defined per environment in the `filterOptions` object. This avoids a dynamic RPC call (`get_filter_options`) and makes filter dropdowns instant. Update `config.js` when new tools, categories, or other values are added to the database.
 
 Credentials and the selected environment index are persisted in `localStorage` (`sb_project_id`, `sb_key`, `sb_selected_env`) after the first successful OAuth redirect, so subsequent visits restore the correct environment without re-reading `config.js`.
 
@@ -381,7 +366,7 @@ Reviewed state is managed client-side (no database writes):
 
 13. **Supabase Realtime requires publication + RLS**: For live sidebar updates, `chat_messages` must be added to the `supabase_realtime` publication **and** have a SELECT RLS policy for `authenticated` users. The publication can be checked with `SELECT * FROM pg_publication_tables WHERE pubname = 'supabase_realtime'`. Without both, the WebSocket connects (Live badge turns green) but no events are delivered.
 
-14. **Filter options: config.js with RPC fallback**: Filter dropdown values (tools, categories, request types, projects, visitor types, languages) are read from `config.js` `filterOptions` per environment. If `filterOptions` is empty or missing, the app falls back to the `get_filter_options` RPC. Populate `config.js` for instant filter loading; leave empty to use the RPC.
+14. **Filter options loaded via RPC at login**: Filter dropdown values (tools, categories, request types, projects, visitor types, languages) are fetched once via `get_filter_options` RPC at login and on refresh. Optionally, `config.js` can define a `filterOptions` object per environment to skip the RPC call — if present and non-empty, the RPC is not called.
 
 ## Development Workflow
 

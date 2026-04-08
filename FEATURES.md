@@ -115,7 +115,7 @@ Update this file whenever a feature is added, changed, or completed.
 - [x] **Visitor badges in chat header** — project (indigo), visitor type (pink), language (lime), WhatsApp (teal), validated (teal), lead/case/booking entity (purple) shown in chat header when session is selected
 - [x] **Badge separation** — full visitor settings badges shown in chat header; project and visitor type also shown in session list items; AI conversation badges (categories, request types) shown only in session list items
 - [x] **Visitor settings filters** — server-side filters for project, visitor type, language (multi-select dropdown checklists, OR logic), validation, WhatsApp (boolean select), has lead/case/booking (boolean select)
-- [x] **Filter options from `config.js`** — tools, categories, request types, projects, visitor types, and languages defined per environment in `filterOptions`; loaded instantly at login with no RPC call
+- [x] **Filter options from `get_filter_options` RPC** — tools, categories, request types, projects, visitor types, and languages fetched once at login; optionally overridden by `config.js` `filterOptions` per environment
 
 ### UI / UX
 - [x] WhatsApp-inspired design with CSS custom properties for theming
