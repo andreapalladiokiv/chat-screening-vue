@@ -595,6 +595,8 @@ function handleRealtimeInsert(payload) {
     };
     allSessions.unshift(session);
     sessionMap.set(sid, session);
+    // Fetch visitor settings asynchronously for the new session
+    fetchVisitorSettings(sid, session);
   }
 
   session.count++;
@@ -639,6 +641,33 @@ function handleRealtimeInsert(payload) {
   // Targeted DOM update instead of full rebuild
   updateSessionInDOM(session, isNew);
   if (sid === currentSessionId) appendRealtimeMessage(row);
+}
+
+// Fetch visitor settings for a session and update its badges
+async function fetchVisitorSettings(sid, session) {
+  if (!db) return;
+  try {
+    const { data, error } = await db
+      .from('visitors_settings')
+      .select('project, type, language, validation, is_whatsapp, lead_id, case_id, booking_identifier, request_id, masked_client_phone')
+      .eq('session_id', sid)
+      .maybeSingle();
+    if (error || !data) return;
+    session.project = data.project || null;
+    session.visitorType = data.type || null;
+    session.language = data.language || null;
+    session.validation = data.validation || false;
+    session.isWhatsapp = data.is_whatsapp || false;
+    session.hasLead = !!data.lead_id;
+    session.hasCase = !!data.case_id;
+    session.hasBooking = !!data.booking_identifier;
+    session.requestId = data.request_id || null;
+    session.maskedClientPhone = data.masked_client_phone || null;
+    // Re-render this session's badges in the sidebar
+    updateSessionInDOM(session, false);
+  } catch (err) {
+    console.warn('[realtime] Failed to fetch visitor settings for', sid, err.message);
+  }
 }
 
 function getCheckedValues(panel) {
