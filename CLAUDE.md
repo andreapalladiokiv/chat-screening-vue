@@ -14,7 +14,7 @@ The application is a zero-build-step frontend: open `index.html` in a browser an
 chat-view/
 ├── index.html                              # Single-page app (HTML + all CSS)
 ├── app.js                                  # All application logic (~1700 lines)
-├── config.js                               # Gitignored — Supabase credentials, multi-env config + optional domain restriction
+├── config.js                               # Gitignored — Supabase credentials, multi-env config, filter options + optional domain restriction
 ├── favicon.svg                             # Eyes emoji favicon
 ├── CLAUDE.md                               # AI assistant context (this file)
 ├── FEATURES.md                             # Feature list and todo tracker
@@ -82,13 +82,28 @@ window.CHAT_VIEW_CONFIG = {
 // Multi-environment format — shows a named dropdown on the login screen
 window.CHAT_VIEW_CONFIG = {
   environments: [
-    { name: 'Staging',    projectId: 'staging-id',    anonKey: 'staging-key',    allowedDomains: [] },
-    { name: 'Production', projectId: 'prod-id',       anonKey: 'prod-key',       allowedDomains: ['yourcompany.com'] },
+    {
+      name: 'Staging',    projectId: 'staging-id',    anonKey: 'staging-key',    allowedDomains: [],
+      filterOptions: {
+        tools: ['tool_a', 'tool_b'],
+        categories: ['Support', 'Sales'],
+        requestTypes: ['Booking', 'Cancellation'],
+        projects: ['ProjectA'],
+        visitorTypes: ['Guest', 'Member'],
+        languages: ['en', 'ro'],
+      },
+    },
+    {
+      name: 'Production', projectId: 'prod-id',       anonKey: 'prod-key',       allowedDomains: ['yourcompany.com'],
+      filterOptions: { tools: [], categories: [], requestTypes: [], projects: [], visitorTypes: [], languages: [] },
+    },
   ]
 };
 ```
 
 When `environments` has 2+ entries, an **"Environment"** `<select>` dropdown appears on the login card above the Google sign-in button. With only 1 entry (or the single-env format), the dropdown is hidden.
+
+**Filter options** are defined per environment in the `filterOptions` object. This avoids a dynamic RPC call (`get_filter_options`) and makes filter dropdowns instant. Update `config.js` when new tools, categories, or other values are added to the database.
 
 Credentials and the selected environment index are persisted in `localStorage` (`sb_project_id`, `sb_key`, `sb_selected_env`) after the first successful OAuth redirect, so subsequent visits restore the correct environment without re-reading `config.js`.
 
@@ -302,7 +317,7 @@ The Edge Function:
     - `.chat-area` — wraps the header bar and `#chat-main`:
       - `#chat-header-bar` — permanent header with `#chat-session-controls` (left: reviewed/feedback buttons, message count, type pills, visitor settings badges)
       - `#chat-main` — scrollable message area; wiped and repopulated on session switch
-- `app.js` is loaded with a cache-busting query param (`?v=51`) — increment this when deploying changes
+- `app.js` is loaded with a cache-busting query param (`?v=52`) — increment this when deploying changes
 - Login panel contains only the environment selector (if multi-env), "Sign in with Google" button, and `#login-error`; no credential input fields, no status log
 
 ## Filtering Logic
