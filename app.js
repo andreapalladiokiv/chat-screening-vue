@@ -649,7 +649,7 @@ async function fetchVisitorSettings(sid, session) {
   try {
     const { data, error } = await db
       .from('visitors_settings')
-      .select('project, type, language, validation, is_whatsapp, lead_id, case_id, booking_identifier, request_id, masked_client_phone')
+      .select('project, type, language, validation, is_whatsapp, lead_id, case_id, booking_identifier, request_id, masked_client_phone, conversation_id')
       .eq('session_id', sid)
       .maybeSingle();
     if (error || !data) return;
@@ -663,6 +663,7 @@ async function fetchVisitorSettings(sid, session) {
     session.hasBooking = !!data.booking_identifier;
     session.requestId = data.request_id || null;
     session.maskedClientPhone = data.masked_client_phone || null;
+    session.conversationId = data.conversation_id || null;
     // Re-render this session's badges in the sidebar
     updateSessionInDOM(session, false);
   } catch (err) {
@@ -835,6 +836,7 @@ function parseSessionResults(rows) {
     hasBooking: row.has_booking || false,
     requestId: row.request_id || null,
     maskedClientPhone: row.masked_client_phone || null,
+    conversationId: row.conversation_id || null,
   }));
 }
 
@@ -1266,10 +1268,11 @@ function createSessionLi(session) {
   li.className = 'session-item' + (session.id === currentSessionId ? ' active' : '');
   li.tabIndex = 0;
   li.dataset.sessionId = session.id;
+  const displayId = session.conversationId || session.id;
   const typePills = buildTypePillsHtml(session.typeCounts);
   const badgesHtml = buildSessionBadgesHtml(session);
   li.innerHTML = `
-    <div class="session-id">${escapeHtml(session.id)}<button class="session-id-copy-btn" title="Copy session ID" data-sid="${escapeHtml(session.id)}">&#x2398;</button></div>
+    <div class="session-id">${escapeHtml(displayId)}<button class="session-id-copy-btn" title="Copy session ID" data-sid="${escapeHtml(session.id)}">&#x2398;</button></div>
     <div class="session-meta">${session.count} messages &middot; ${formatDate(session.latest)}</div>
     <div class="type-counts">${typePills}</div>
     ${badgesHtml}
@@ -1295,6 +1298,13 @@ function updateSessionInDOM(session, isNew) {
     const li = sessionList.querySelector(`[data-session-id="${session.id}"]`);
     if (!li) return; // session filtered out, nothing to update
     // Update content in-place
+    const idEl = li.querySelector('.session-id');
+    if (idEl) {
+      const displayId = session.conversationId || session.id;
+      const copyBtn = idEl.querySelector('.session-id-copy-btn');
+      idEl.textContent = displayId;
+      if (copyBtn) idEl.appendChild(copyBtn);
+    }
     const metaEl = li.querySelector('.session-meta');
     if (metaEl) metaEl.textContent = `${session.count} messages \u00b7 ${formatDate(session.latest)}`;
     const countsEl = li.querySelector('.type-counts');

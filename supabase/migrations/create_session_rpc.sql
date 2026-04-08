@@ -254,7 +254,7 @@ BEGIN
            lead_id IS NOT NULL          AS has_lead,
            case_id IS NOT NULL          AS has_case,
            booking_identifier IS NOT NULL AS has_booking,
-           request_id, masked_client_phone
+           request_id, masked_client_phone, conversation_id
     FROM   visitors_settings
     WHERE  session_id = ANY(v_session_ids)
   ),
@@ -271,7 +271,7 @@ BEGIN
       COALESCE(vs.has_lead, false)    AS has_lead,
       COALESCE(vs.has_case, false)    AS has_case,
       COALESCE(vs.has_booking, false) AS has_booking,
-      vs.request_id, vs.masked_client_phone
+      vs.request_id, vs.masked_client_phone, vs.conversation_id
     FROM session_stats ss
     LEFT JOIN session_tools_agg sta ON ss.session_id = sta.session_id
     LEFT JOIN session_ai_agg   saa ON ss.session_id = saa.session_id
