@@ -119,10 +119,20 @@ Update this file whenever a feature is added, changed, or completed.
 
 ### UI / UX
 - [x] WhatsApp-inspired design with CSS custom properties for theming
-- [x] CSS design tokens: shadow scale (`--shadow-sm` to `--shadow-xl`), radius scale (`--radius-sm` to `--radius-full`), z-index layers (`--z-sidebar` to `--z-modal`)
+- [x] CSS design tokens: shadow scale (`--shadow-sm` to `--shadow-xl`), radius scale (`--radius-sm` to `--radius-full`), z-index layers (`--z-sidebar` to `--z-modal`), comprehensive badge/pill/tool color variables
 - [x] Responsive layout: sidebar overlays at ≤768px
 - [x] Collapsible tool call / tool result details (`<details>` element)
-- [x] Cache-busting query param on `app.js` (`?v=51`) — increment when deploying
+- [x] **Expand/Collapse All** toggle button in chat header — expands or collapses all tool `<details>` elements at once
+- [x] **Session Summary Card** — shown at top of messages when a session is selected; displays duration, message type pills, classification badges (category, type, verified, end), and tools used
+- [x] **Quick-jump buttons** in session summary — "First AI", "First Tool", "Last" scroll to respective messages
+- [x] **Standardized tool/system message dimensions** — fixed 80% width, max-height with scroll for tool bubbles
+- [x] **Enhanced system messages** — rendered as structured grid cards (label + value rows) instead of single-line text
+- [x] **Copy message text** — hover over any message bubble to reveal a "Copy" button; click copies message text to clipboard
+- [x] **In-session search** — search bar at top of messages area; debounced text matching with `<mark>` highlights, prev/next navigation, and match counter
+- [x] **Keyboard shortcuts** — `J`/`K` navigate sessions, `E` expand/collapse tools, `R` toggle reviewed, `F` open feedback, `/` focus search, `Escape` close modals, `Ctrl+Shift+F` focus in-session search
+- [x] **Configurable timezone** — defaults to browser timezone; click the timezone indicator in the top nav to change; persisted in `localStorage`
+- [x] **Filter by verified / end-conversation** — boolean select filters in the AI Response filter group; applied client-side
+- [x] Cache-busting query param on `app.js` (`?v=53`) — increment when deploying
 - [x] Loading overlay during session load and filter apply
 - [x] "Searching..." indicator in session list during server-side search
 - [x] **Empty states** — "No sessions found" or "No sessions match your filters" with Clear Filters action link
@@ -151,10 +161,6 @@ Update this file whenever a feature is added, changed, or completed.
 ---
 
 ## Todo
-
-### High Priority
-- [ ] **Configurable timezone** — currently hardcoded to `Europe/Chisinau`; let user pick from a dropdown or detect from browser (`Intl.DateTimeFormat().resolvedOptions().timeZone`)
-- [ ] **Filter by verified / end-conversation flags** — two boolean session properties visible as badges but not yet exposed as filter options
 
 ### Low Priority / Nice to Have
 - [ ] **Export** — download a session's messages as JSON or plain text
