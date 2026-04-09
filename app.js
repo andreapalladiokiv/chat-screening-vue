@@ -510,6 +510,10 @@ async function handleLogout() {
   closeAdminModal();
   const sc = document.getElementById('chat-session-controls');
   if (sc) sc.innerHTML = '';
+  const hr = document.getElementById('chat-header-right');
+  if (hr) hr.innerHTML = '';
+  const ds = document.getElementById('detail-sidebar');
+  if (ds) { ds.innerHTML = ''; ds.classList.remove('active'); }
   chatPanel.classList.remove('active');
   loginPanel.style.display = 'flex';
   sessionList.innerHTML = '';
@@ -1505,9 +1509,17 @@ function formatDuration(ms) {
   return hrs + 'h ' + (mins % 60) + 'm';
 }
 
-function buildSessionSummary(rows, sessionId) {
+function populateDetailSidebar(rows, sessionId) {
+  const sidebar = document.getElementById('detail-sidebar');
+  if (!sidebar) return;
+
   const session = sessionMap.get(sessionId);
-  if (!session || rows.length === 0) return '';
+  if (!session || rows.length === 0) {
+    sidebar.classList.remove('active');
+    return;
+  }
+
+  const isReviewed = reviewedSessions.has(sessionId);
 
   // Duration
   const first = new Date(rows[0].created_at);
@@ -1543,81 +1555,70 @@ function buildSessionSummary(rows, sessionId) {
     ? session.tools.map(t => `<span class="summary-tool-tag">${escapeHtml(t)}</span>`).join('')
     : '<span style="color:var(--text-secondary);font-size:12px;">none</span>';
 
-  return `
-    <div class="session-summary">
-      <div class="session-summary-row">
-        <span class="summary-label">Duration</span>
-        <span class="summary-duration">${duration}</span>
-        <span class="summary-label" style="margin-left:8px">Messages</span>
-        <div class="type-counts" style="margin:0">${typePills}</div>
-        <div class="summary-jump-btns">
-          <button class="summary-jump-btn" data-jump="ai">First AI</button>
-          <button class="summary-jump-btn" data-jump="tool">First Tool</button>
-          <button class="summary-jump-btn" data-jump="last">Last</button>
-        </div>
-      </div>
-      ${classification ? `<div class="session-summary-row">
-        <span class="summary-label">Result</span>
-        <div class="badges" style="margin:0">${classification}</div>
-      </div>` : ''}
-      <div class="session-summary-row">
-        <span class="summary-label">Tools</span>
-        <div class="summary-tools">${toolsHtml}</div>
+  // Visitor info
+  const visitorInfoHtml = buildVisitorInfoHtml(session);
+
+  sidebar.innerHTML = `
+    <div class="detail-sidebar-section detail-sidebar-actions">
+      <button class="chat-reviewed-btn${isReviewed ? ' reviewed-active' : ''}" id="chat-reviewed-btn">${isReviewed ? 'Reviewed \u2713' : 'Mark Reviewed'}</button>
+      <button class="chat-feedback-btn" id="chat-feedback-btn">Feedback</button>
+      <button class="tool-toggle-btn" id="tool-toggle-btn" title="Expand or collapse all tool details">Expand All</button>
+    </div>
+    <div class="detail-sidebar-section detail-sidebar-search" id="detail-sidebar-search"></div>
+    <div class="detail-sidebar-section">
+      <span class="detail-sidebar-label">Quick Jump</span>
+      <div class="summary-jump-btns">
+        <button class="summary-jump-btn" data-jump="ai">First AI</button>
+        <button class="summary-jump-btn" data-jump="tool">First Tool</button>
+        <button class="summary-jump-btn" data-jump="last">Last</button>
       </div>
     </div>
-  `;
-}
-
-// ── Message Rendering ──
-function renderMessages(rows, sessionId) {
-  chatMain.innerHTML = '';
-
-  // Count message types
-  const headerCounts = { human: 0, ai: 0, tool: 0, system: 0 };
-  for (const row of rows) {
-    try {
-      const msg = typeof row.message === 'string' ? JSON.parse(row.message) : row.message;
-      const t = msg && msg.type;
-      if (headerCounts[t] !== undefined) headerCounts[t]++;
-    } catch { /* skip */ }
-  }
-
-  // Chat header — update permanent session controls bar
-  const isReviewed = reviewedSessions.has(sessionId);
-  const sessionControls = document.getElementById('chat-session-controls');
-  const session = sessionMap.get(sessionId);
-  const visitorInfoHtml = buildVisitorInfoHtml(session);
-  sessionControls.innerHTML = `
-    <button class="chat-reviewed-btn${isReviewed ? ' reviewed-active' : ''}" id="chat-reviewed-btn">${isReviewed ? 'Reviewed ✓' : 'Mark Reviewed'}</button>
-    <button class="chat-feedback-btn" id="chat-feedback-btn">Feedback</button>
-    <button class="tool-toggle-btn" id="tool-toggle-btn" title="Expand or collapse all tool details">Expand All</button>
-    <span class="meta-info">${rows.length} messages</span>
-    ${visitorInfoHtml}
+    <div class="detail-sidebar-section">
+      <span class="detail-sidebar-label">Duration</span>
+      <span class="summary-duration">${duration}</span>
+    </div>
+    <div class="detail-sidebar-section">
+      <span class="detail-sidebar-label">Messages</span>
+      <div class="type-counts">${typePills}</div>
+    </div>
+    ${classification ? `<div class="detail-sidebar-section">
+      <span class="detail-sidebar-label">Result</span>
+      <div class="badges">${classification}</div>
+    </div>` : ''}
+    <div class="detail-sidebar-section">
+      <span class="detail-sidebar-label">Tools Used</span>
+      <div class="summary-tools">${toolsHtml}</div>
+    </div>
+    ${visitorInfoHtml ? `<div class="detail-sidebar-section">
+      <span class="detail-sidebar-label">Visitor</span>
+      ${visitorInfoHtml}
+    </div>` : ''}
   `;
 
-  sessionControls.querySelector('#chat-reviewed-btn').addEventListener('click', () => toggleReviewed(sessionId));
+  sidebar.classList.add('active');
 
-  sessionControls.querySelector('#chat-feedback-btn').addEventListener('click', () => {
+  // Wire up action buttons
+  sidebar.querySelector('#chat-reviewed-btn').addEventListener('click', () => toggleReviewed(sessionId));
+
+  sidebar.querySelector('#chat-feedback-btn').addEventListener('click', () => {
     openFeedbackModal('chat', { session_id: sessionId, message_count: rows.length });
   });
 
-  sessionControls.querySelector('#tool-toggle-btn').addEventListener('click', function () {
+  sidebar.querySelector('#tool-toggle-btn').addEventListener('click', function () {
     const details = chatMain.querySelectorAll('.tool-details');
     const allOpen = Array.from(details).every(d => d.open);
     details.forEach(d => d.open = !allOpen);
     this.textContent = allOpen ? 'Expand All' : 'Collapse All';
   });
 
-  // Messages container
-  const container = document.createElement('div');
-  container.className = 'messages-container';
-  chatMain.appendChild(container);
+  // In-session search
+  const searchContainer = sidebar.querySelector('#detail-sidebar-search');
+  initSessionSearch(searchContainer);
 
-  // Session summary card at top
-  const summaryHtml = buildSessionSummary(rows, sessionId);
-  if (summaryHtml) {
-    container.insertAdjacentHTML('beforeend', summaryHtml);
-    container.querySelectorAll('.summary-jump-btn').forEach(btn => {
+  // Jump button listeners
+  const container = chatMain.querySelector('.messages-container');
+  if (container) {
+    sidebar.querySelectorAll('.summary-jump-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const target = btn.dataset.jump;
         let el;
@@ -1628,6 +1629,33 @@ function renderMessages(rows, sessionId) {
       });
     });
   }
+}
+
+// ── Message Rendering ──
+function renderMessages(rows, sessionId) {
+  chatMain.innerHTML = '';
+
+  // Chat header — show session ID only
+  const sessionControls = document.getElementById('chat-session-controls');
+  const session = sessionMap.get(sessionId);
+  const displayId = (session && session.conversationId) || sessionId;
+  sessionControls.innerHTML = `<h3 class="session-id-copy" title="Click to copy session ID">${escapeHtml(displayId)}</h3>`;
+  sessionControls.querySelector('.session-id-copy').addEventListener('click', () => {
+    navigator.clipboard.writeText(sessionId).then(() => {
+      const el = sessionControls.querySelector('.session-id-copy');
+      el.classList.add('copied');
+      const orig = el.textContent;
+      el.textContent = 'Copied!';
+      setTimeout(() => { el.textContent = orig; el.classList.remove('copied'); }, 1200);
+    });
+  });
+  const headerRight = document.getElementById('chat-header-right');
+  headerRight.innerHTML = '';
+
+  // Messages container
+  const container = document.createElement('div');
+  container.className = 'messages-container';
+  chatMain.appendChild(container);
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
@@ -1690,8 +1718,8 @@ function renderMessages(rows, sessionId) {
     container.appendChild(wrapper);
   }
 
-  // In-session search bar
-  initSessionSearch(container);
+  // Populate right detail sidebar
+  populateDetailSidebar(rows, sessionId);
 
   // Scroll to bottom
   container.scrollTop = container.scrollHeight;
@@ -1743,13 +1771,7 @@ function appendRealtimeMessage(row) {
   container.appendChild(wrapper);
   container.scrollTop = container.scrollHeight;
 
-  // Update header message count and type pills
-  const session = sessionMap.get(currentSessionId);
-  const sessionControls = document.getElementById('chat-session-controls');
-  const metaEl = sessionControls && sessionControls.querySelector('.meta-info');
-  if (metaEl && session) metaEl.textContent = session.count + ' messages';
-  const pillsEl = sessionControls && sessionControls.querySelector('.chat-header-counts');
-  if (pillsEl && session) pillsEl.innerHTML = buildTypePillsHtml(session.typeCounts);
+  // Note: sidebar type pills are static from render time; will refresh on next session select
 }
 
 function createHumanBubble(parsed) {
@@ -1866,18 +1888,18 @@ function createSystemBubble(parsed) {
 let sessionSearchMatches = [];
 let sessionSearchIndex = -1;
 
-function initSessionSearch(container) {
+function initSessionSearch(headerRight) {
   const bar = document.createElement('div');
   bar.className = 'session-search-bar';
   bar.innerHTML = `
-    <input type="text" id="session-msg-search" placeholder="Search in messages..." />
+    <input type="text" id="session-msg-search" placeholder="Search messages..." />
     <span class="session-search-count" id="session-search-count"></span>
     <div class="session-search-nav">
       <button id="session-search-prev" title="Previous match">&#9650;</button>
       <button id="session-search-next" title="Next match">&#9660;</button>
     </div>
   `;
-  container.insertBefore(bar, container.firstChild);
+  headerRight.appendChild(bar);
 
   const input = bar.querySelector('#session-msg-search');
   const countEl = bar.querySelector('#session-search-count');
@@ -1887,10 +1909,19 @@ function initSessionSearch(container) {
 
   input.addEventListener('input', () => {
     clearTimeout(debounce);
-    debounce = setTimeout(() => performSessionSearch(container, input.value, countEl), 300);
+    const msgContainer = chatMain.querySelector('.messages-container');
+    if (msgContainer) {
+      debounce = setTimeout(() => performSessionSearch(msgContainer, input.value, countEl), 300);
+    }
   });
-  prevBtn.addEventListener('click', () => navigateMatch(container, countEl, -1));
-  nextBtn.addEventListener('click', () => navigateMatch(container, countEl, 1));
+  prevBtn.addEventListener('click', () => {
+    const msgContainer = chatMain.querySelector('.messages-container');
+    if (msgContainer) navigateMatch(msgContainer, countEl, -1);
+  });
+  nextBtn.addEventListener('click', () => {
+    const msgContainer = chatMain.querySelector('.messages-container');
+    if (msgContainer) navigateMatch(msgContainer, countEl, 1);
+  });
 }
 
 function performSessionSearch(container, query, countEl) {

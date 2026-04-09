@@ -275,15 +275,15 @@ The Edge Function:
 - **Copy** — hover over a session ID in the session list or any message bubble to reveal a copy button; click copies to clipboard with visual feedback
 - **Empty states** — session list shows "No sessions found" or "No sessions match your filters" with a Clear Filters link
 - **Timezone** — configurable via `getTimeZone()`/`setTimeZone()` functions; defaults to browser timezone; persisted in `localStorage` key `chat_view_timezone`; visible indicator + click-to-change button in top nav bar
-- **Session summary card** — shown at top of messages container; displays duration, type pills, classification badges, and tools used; includes quick-jump buttons ("First AI", "First Tool", "Last")
-- **In-session search** — search bar inside messages container; debounced regex text matching with `<mark>` highlights, prev/next navigation, match counter
+- **Detail sidebar (right panel)** — shown when a session is selected; contains session controls (reviewed, feedback, expand/collapse), in-session search, quick-jump buttons, duration, message type pills, classification badges, tools used, and visitor info badges
+- **In-session search** — search bar in the detail sidebar; debounced regex text matching with `<mark>` highlights, prev/next navigation, match counter
 - **Enhanced system messages** — parsed JSON rendered as structured grid cards (label-value rows) instead of single-line text
-- **Tool/system message dimensions** — tool and system bubbles have fixed 80% width; tool bubbles have max-height 500px with scroll
+- **Tool/system message dimensions** — tool and system bubbles have fixed 80% width; max-height 500px with scroll
 - **Error handling** — connection errors shown in `#login-error`; message errors logged to console
 - **Status log** — `logStatus()` is a no-op that writes to `console.log` only; the visible status log was removed from the login UI
 - **Environment switcher** — dropdown in the top nav bar (near Live badge) allows switching environments without logging out; triggers sign-out, re-auth with the new project's OAuth
 - **Time gate** — shows the time range (last-activity based) of currently loaded sessions in the session info bar
-- **Badge separation** — visitor settings badges (project, visitor type, language, WhatsApp, validated, lead/case/booking) shown in chat header; project and visitor type also shown in session list items; AI conversation badges (categories, request types, verified, end) shown only in session list items. Chat header shows message count but no type pills (human/ai/tool/system).
+- **Badge separation** — visitor settings badges (project, visitor type, language, WhatsApp, validated, lead/case/booking) shown in the detail sidebar; project and visitor type also shown in session list items; AI conversation badges (categories, request types, verified, end) shown only in session list items. Chat header shows only the session/conversation ID.
 
 ### CSS (index.html)
 
@@ -304,9 +304,10 @@ The Edge Function:
   - `.content-area` — horizontal flex containing:
     - `#sidebar` — session info bar (count + time gate) and scrollable session list
     - `.chat-area` — wraps the header bar and `#chat-main`:
-      - `#chat-header-bar` — permanent header with `#chat-session-controls` (left: reviewed/feedback buttons, message count, type pills, visitor settings badges)
+      - `#chat-header-bar` — permanent header with `#chat-session-controls` (shows session/conversation ID when selected)
       - `#chat-main` — scrollable message area; wiped and repopulated on session switch
-- `app.js` is loaded with a cache-busting query param (`?v=53`) — increment this when deploying changes
+    - `#detail-sidebar` — right panel (280px), shown when a session is selected; contains session controls (reviewed/feedback/expand-collapse), in-session search, quick-jump buttons, duration, message pills, classification, tools, and visitor info
+- `app.js` is loaded with a cache-busting query param (`?v=54`) — increment this when deploying changes
 - Login panel contains only the environment selector (if multi-env), "Sign in with Google" button, and `#login-error`; no credential input fields, no status log
 
 ## Filtering Logic

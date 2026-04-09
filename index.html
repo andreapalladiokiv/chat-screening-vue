@@ -1175,6 +1175,8 @@
       padding: 10px 16px;
       border-radius: var(--radius);
       border: 1px solid var(--border);
+      max-height: 500px;
+      overflow-y: auto;
     }
     .system-grid {
       display: grid;
@@ -1206,44 +1208,44 @@
       overflow-y: auto;
     }
 
-    /* In-session search */
+    /* In-session search (in detail sidebar) */
     .session-search-bar {
       display: flex;
       align-items: center;
-      gap: 6px;
-      margin-bottom: 10px;
-      background: var(--white);
+      gap: 4px;
+      background: var(--bg);
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      padding: 6px 10px;
-      box-shadow: var(--shadow);
+      padding: 5px 8px;
     }
     .session-search-bar input {
       flex: 1;
       border: none;
       outline: none;
-      font-size: 13px;
+      font-size: 12px;
       background: transparent;
       color: var(--text-primary);
+      min-width: 0;
     }
     .session-search-bar input::placeholder { color: var(--text-secondary); }
     .session-search-nav {
       display: flex;
       align-items: center;
-      gap: 2px;
+      gap: 1px;
     }
     .session-search-nav button {
       background: none;
       border: none;
       cursor: pointer;
-      font-size: 14px;
+      font-size: 12px;
       color: var(--text-secondary);
-      padding: 2px 4px;
+      padding: 1px 3px;
       border-radius: var(--radius-sm);
+      line-height: 1;
     }
-    .session-search-nav button:hover { background: var(--bg); color: var(--text-primary); }
+    .session-search-nav button:hover { background: var(--border); color: var(--text-primary); }
     .session-search-count {
-      font-size: 11px;
+      font-size: 10px;
       color: var(--text-secondary);
       white-space: nowrap;
     }
@@ -1258,35 +1260,33 @@
       color: #fff;
     }
 
-    /* Session Summary Card */
-    .session-summary {
-      background: var(--white);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 14px 18px;
-      margin-bottom: 12px;
-      box-shadow: var(--shadow);
+    /* Detail Sidebar (right panel) */
+    .detail-sidebar {
+      width: 280px;
+      min-width: 220px;
+      flex-shrink: 0;
+      background: var(--sidebar-bg);
+      border-left: 1px solid var(--border);
+      display: none;
+      flex-direction: column;
+      overflow-y: auto;
     }
-    .session-summary-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      align-items: center;
+    .detail-sidebar.active { display: flex; }
+    .detail-sidebar-section {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
     }
-    .session-summary-row + .session-summary-row {
-      margin-top: 8px;
-      padding-top: 8px;
-      border-top: 1px solid var(--border);
-    }
-    .summary-label {
+    .detail-sidebar-section:last-child { border-bottom: none; }
+    .detail-sidebar-label {
       font-size: 10px;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.5px;
       color: var(--text-secondary);
-      min-width: 70px;
+      margin-bottom: 6px;
+      display: block;
     }
-    .summary-value {
+    .detail-sidebar-value {
       font-size: 13px;
       color: var(--text-primary);
       font-weight: 500;
@@ -1298,6 +1298,7 @@
       background: var(--bg);
       padding: 2px 8px;
       border-radius: var(--radius-sm);
+      display: inline-block;
     }
     .summary-tools {
       display: flex;
@@ -1314,8 +1315,8 @@
     }
     .summary-jump-btns {
       display: flex;
+      flex-wrap: wrap;
       gap: 4px;
-      margin-left: auto;
     }
     .summary-jump-btn {
       background: var(--bg);
@@ -1329,6 +1330,33 @@
       font-weight: 600;
     }
     .summary-jump-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .detail-sidebar .badges {
+      margin-top: 0;
+    }
+    .detail-sidebar .type-counts {
+      margin-top: 0;
+    }
+    .detail-sidebar .chat-header-visitor {
+      flex-wrap: wrap;
+    }
+    .detail-sidebar-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .detail-sidebar-actions .chat-reviewed-btn,
+    .detail-sidebar-actions .chat-feedback-btn,
+    .detail-sidebar-actions .tool-toggle-btn {
+      flex: 1;
+      min-width: 0;
+      text-align: center;
+      font-size: 12px;
+      padding: 5px 6px;
+    }
+    .detail-sidebar-search {
+      padding-top: 8px !important;
+      padding-bottom: 8px !important;
+    }
 
     .message-text {
       white-space: pre-wrap;
@@ -1701,6 +1729,7 @@
     @media (max-width: 768px) {
       .sidebar { width: 100%; position: absolute; z-index: var(--z-sidebar); }
       .sidebar.hidden { display: none; }
+      .detail-sidebar { display: none !important; }
       .message { max-width: 85%; }
       .top-nav { flex-wrap: wrap; }
       .top-nav .search-box { order: 3; flex-basis: 100%; max-width: 100%; }
@@ -2058,7 +2087,7 @@
       <div class="chat-area">
         <div class="chat-header" id="chat-header-bar">
           <div class="chat-session-controls" id="chat-session-controls"></div>
-          <div class="chat-header-right"></div>
+          <div class="chat-header-right" id="chat-header-right"></div>
         </div>
         <div class="chat-main" id="chat-main">
           <div class="chat-empty" id="chat-empty">
@@ -2066,6 +2095,9 @@
           </div>
         </div>
       </div>
+
+      <!-- Detail Sidebar (right panel, shown when session selected) -->
+      <div class="detail-sidebar" id="detail-sidebar"></div>
     </div>
   </div>
 
@@ -2151,7 +2183,7 @@
   </script>
   <!-- config.js is gitignored; its absence is fine — the app falls back to manual entry -->
   <script src="config.js" onerror="console.info('config.js not found — using manual credential entry.');"></script>
-  <script src="app.js?v=53"
+  <script src="app.js?v=54"
           onerror="document.getElementById('login-error').style.display='block'; document.getElementById('login-error').textContent='Failed to load app.js.';">
   </script>
 </body>
