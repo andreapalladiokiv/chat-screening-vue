@@ -1682,7 +1682,10 @@ function renderMessages(rows, sessionId) {
       wrapper.appendChild(createSystemBubble(parsed));
     }
 
-    // Copy button on every message
+    // Action buttons group (copy + feedback) — inline next to bubble
+    const actionGroup = document.createElement('div');
+    actionGroup.className = 'msg-action-group';
+
     const copyBtn = document.createElement('button');
     copyBtn.className = 'msg-copy-btn';
     copyBtn.title = 'Copy message text';
@@ -1695,13 +1698,12 @@ function renderMessages(rows, sessionId) {
         setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1200);
       });
     });
-    wrapper.appendChild(copyBtn);
+    actionGroup.appendChild(copyBtn);
 
-    // Hover feedback button on every message
     const fbBtn = document.createElement('button');
     fbBtn.className = 'feedback-hover-btn';
     fbBtn.title = 'Leave feedback on this message';
-    fbBtn.textContent = '\uD83D\uDCAC'; // speech bubble
+    fbBtn.textContent = '\uD83D\uDCAC';
     fbBtn.addEventListener('click', () => {
       openFeedbackModal('message', {
         session_id: sessionId,
@@ -1713,8 +1715,9 @@ function renderMessages(rows, sessionId) {
         raw: parsed.raw,
       });
     });
-    wrapper.appendChild(fbBtn);
+    actionGroup.appendChild(fbBtn);
 
+    wrapper.appendChild(actionGroup);
     container.appendChild(wrapper);
   }
 
@@ -1750,7 +1753,24 @@ function appendRealtimeMessage(row) {
     wrapper.appendChild(createSystemBubble(parsed));
   }
 
-  // Feedback hover button (same pattern as renderMessages)
+  // Action buttons group (same pattern as renderMessages)
+  const actionGroup = document.createElement('div');
+  actionGroup.className = 'msg-action-group';
+
+  const copyBtn = document.createElement('button');
+  copyBtn.className = 'msg-copy-btn';
+  copyBtn.title = 'Copy message text';
+  copyBtn.textContent = 'Copy';
+  const copyText = parsed.text || '';
+  copyBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(copyText).then(() => {
+      copyBtn.textContent = 'Copied!';
+      setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1200);
+    });
+  });
+  actionGroup.appendChild(copyBtn);
+
   const fbBtn = document.createElement('button');
   fbBtn.className = 'feedback-hover-btn';
   fbBtn.title = 'Leave feedback on this message';
@@ -1766,8 +1786,9 @@ function appendRealtimeMessage(row) {
       raw: parsed.raw,
     });
   });
-  wrapper.appendChild(fbBtn);
+  actionGroup.appendChild(fbBtn);
 
+  wrapper.appendChild(actionGroup);
   container.appendChild(wrapper);
   container.scrollTop = container.scrollHeight;
 
