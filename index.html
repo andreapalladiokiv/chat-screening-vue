@@ -1012,11 +1012,16 @@
     .message-wrapper:hover .msg-action-group { display: flex; }
     /* AI messages: actions go before the bubble (left side) */
     .message-wrapper.ai .msg-action-group { order: -1; }
-    /* Centered messages (tool/system): absolute position so they don't shift the bubble */
+    /* Centered messages (tool/system): place just outside the 80%-wide bubble's right edge */
+    .message-wrapper.tool,
+    .message-wrapper.system {
+      position: relative;
+    }
     .message-wrapper.tool .msg-action-group,
     .message-wrapper.system .msg-action-group {
       position: absolute;
-      right: 4px;
+      /* bubble is 80% centered → right edge is at 10% from right → buttons just outside */
+      left: calc(90% + 6px);
       top: 2px;
       flex-direction: row;
     }
