@@ -25,11 +25,14 @@ Update this file whenever a feature is added, changed, or completed.
 
 ### Navigation & Header
 - [x] **Top navigation bar** — horizontal bar containing burger menu, search input, filter button, env switcher, Live badge, and Refresh button
-- [x] Permanent chat header bar (`#chat-header-bar`) outside `#chat-main`, always visible after login
-- [x] Left side of chat header (`#chat-session-controls`): session-specific controls populated when a session is selected:
+- [x] Permanent chat header bar (`#chat-header-bar`) outside `#chat-main`, always visible after login; shows session/conversation ID when a session is selected
+- [x] **Detail sidebar** (`#detail-sidebar`) — right panel shown when a session is selected, containing:
   - Mark Reviewed / Reviewed ✓ toggle button
   - Feedback button
-  - Total message count
+  - Expand All / Collapse All toggle
+  - In-session search
+  - Quick-jump buttons (First AI, First Tool, Last)
+  - Duration, message type pills, classification badges, tools used
   - Visitor settings badges (project, visitor type, language, WhatsApp, validated, lead/case/booking)
 - [x] **Burger menu** (☰) in top nav with dropdown containing:
   - Signed-in user email and role badge (Admin / User)
@@ -112,17 +115,27 @@ Update this file whenever a feature is added, changed, or completed.
 
 ### Visitor Settings Integration
 - [x] **Session enrichment** — `get_session_list` LEFT JOINs `visitors_settings` (via `session_id`) to enrich sessions with project, visitor type, language, validation, WhatsApp channel, lead/case/booking presence, request ID, and masked phone
-- [x] **Visitor badges in chat header** — project (indigo), visitor type (pink), language (lime), WhatsApp (teal), validated (teal), lead/case/booking entity (purple) shown in chat header when session is selected
-- [x] **Badge separation** — full visitor settings badges shown in chat header; project and visitor type also shown in session list items; AI conversation badges (categories, request types) shown only in session list items
+- [x] **Visitor badges in detail sidebar** — project (indigo), visitor type (pink), language (lime), WhatsApp (teal), validated (teal), lead/case/booking entity (purple) shown in detail sidebar when session is selected
+- [x] **Badge separation** — full visitor settings badges shown in detail sidebar; project and visitor type also shown in session list items; AI conversation badges (categories, request types) shown only in session list items
 - [x] **Visitor settings filters** — server-side filters for project, visitor type, language (multi-select dropdown checklists, OR logic), validation, WhatsApp (boolean select), has lead/case/booking (boolean select)
 - [x] **Filter options from `get_filter_options` RPC** — tools, categories, request types, projects, visitor types, and languages fetched once at login; optionally overridden by `config.js` `filterOptions` per environment
 
 ### UI / UX
 - [x] WhatsApp-inspired design with CSS custom properties for theming
-- [x] CSS design tokens: shadow scale (`--shadow-sm` to `--shadow-xl`), radius scale (`--radius-sm` to `--radius-full`), z-index layers (`--z-sidebar` to `--z-modal`)
+- [x] CSS design tokens: shadow scale (`--shadow-sm` to `--shadow-xl`), radius scale (`--radius-sm` to `--radius-full`), z-index layers (`--z-sidebar` to `--z-modal`), comprehensive badge/pill/tool color variables
 - [x] Responsive layout: sidebar overlays at ≤768px
 - [x] Collapsible tool call / tool result details (`<details>` element)
-- [x] Cache-busting query param on `app.js` (`?v=51`) — increment when deploying
+- [x] **Expand/Collapse All** toggle button in chat header — expands or collapses all tool `<details>` elements at once
+- [x] **Detail sidebar (right panel)** — shown when a session is selected; displays duration, message type pills, classification badges (category, type, verified, end), tools used, visitor info, and quick-jump buttons; replaces the former in-messages summary card
+- [x] **Quick-jump buttons** in detail sidebar — "First AI", "First Tool", "Last" scroll to respective messages
+- [x] **Standardized tool/system message dimensions** — fixed 80% width, max-height 500px with scroll for tool and system bubbles
+- [x] **Enhanced system messages** — rendered as structured grid cards (label + value rows) instead of single-line text
+- [x] **Copy message text** — hover over any message bubble to reveal a "Copy" button; click copies message text to clipboard
+- [x] **In-session search** — search bar in chat header (always visible); debounced text matching with `<mark>` highlights, prev/next navigation, and match counter
+- [x] **Keyboard shortcuts** — `J`/`K` navigate sessions, `E` expand/collapse tools, `R` toggle reviewed, `F` open feedback, `/` focus search, `Escape` close modals, `Ctrl+Shift+F` focus in-session search
+- [x] **Configurable timezone** — defaults to browser timezone; click the timezone indicator in the top nav to change; persisted in `localStorage`
+- [x] **Filter by verified / end-conversation** — boolean select filters in the AI Response filter group; applied client-side
+- [x] Cache-busting query param on `app.js` (`?v=54`) — increment when deploying
 - [x] Loading overlay during session load and filter apply
 - [x] "Searching..." indicator in session list during server-side search
 - [x] **Empty states** — "No sessions found" or "No sessions match your filters" with Clear Filters action link
@@ -151,10 +164,6 @@ Update this file whenever a feature is added, changed, or completed.
 ---
 
 ## Todo
-
-### High Priority
-- [ ] **Configurable timezone** — currently hardcoded to `Europe/Chisinau`; let user pick from a dropdown or detect from browser (`Intl.DateTimeFormat().resolvedOptions().timeZone`)
-- [ ] **Filter by verified / end-conversation flags** — two boolean session properties visible as badges but not yet exposed as filter options
 
 ### Low Priority / Nice to Have
 - [ ] **Export** — download a session's messages as JSON or plain text

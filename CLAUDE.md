@@ -271,20 +271,24 @@ The Edge Function:
 - **Lazy loading** — Session list uses RPC `get_session_list` (two-stage architecture: fast GROUP BY for candidate IDs, then JSONB metadata extraction for those sessions only). Default load: 50 most recent sessions. Infinite scroll loads 10 more per batch. Filters are applied server-side via "Apply Filters" button with a max 3-day date range. Filter options (tools, categories, request types) are fetched once at login via `get_filter_options` RPC (AI metadata scoped to last 3 days; visitor options queried directly from `visitors_settings` without date scoping). Retries once on timeout with 3s delay.
 - **Server-side search** — Session ID search queries the entire `chat_messages` table via `p_session_id` ILIKE parameter on `get_session_list`. Debounced at 400ms with a "Searching..." indicator
 - **Shareable URLs** — selecting a session updates the URL with `?session=<id>` via `history.replaceState`; on load, auto-selects the session if present in the URL
-- **Keyboard navigation** — Escape closes all modals/dropdowns; arrow keys navigate session list items; session items are tabbable (`tabIndex=0`)
-- **Copy session ID** — hover over a session ID in the session list to reveal a copy button; click copies to clipboard with visual feedback (✓)
+- **Keyboard shortcuts** — `J`/`K` navigate sessions, `E` expand/collapse tools, `R` toggle reviewed, `F` open feedback, `/` focus search, `Escape` close modals, `Ctrl+Shift+F` focus in-session search; session items are tabbable (`tabIndex=0`)
+- **Copy** — hover over a session ID in the session list or any message bubble to reveal a copy button; click copies to clipboard with visual feedback
 - **Empty states** — session list shows "No sessions found" or "No sessions match your filters" with a Clear Filters link
-- **Timezone** — All dates displayed in `'Europe/Chisinau'` timezone (hardcoded constant `TIME_ZONE` near the bottom of `app.js`)
+- **Timezone** — configurable via `getTimeZone()`/`setTimeZone()` functions; defaults to browser timezone; persisted in `localStorage` key `chat_view_timezone`; visible indicator + click-to-change button in top nav bar
+- **Detail sidebar (right panel)** — shown when a session is selected; contains session controls (reviewed, feedback, expand/collapse), in-session search, quick-jump buttons, duration, message type pills, classification badges, tools used, and visitor info badges
+- **In-session search** — search bar in the detail sidebar; debounced regex text matching with `<mark>` highlights, prev/next navigation, match counter
+- **Enhanced system messages** — parsed JSON rendered as structured grid cards (label-value rows) instead of single-line text
+- **Tool/system message dimensions** — tool and system bubbles have fixed 80% width; max-height 500px with scroll
 - **Error handling** — connection errors shown in `#login-error`; message errors logged to console
 - **Status log** — `logStatus()` is a no-op that writes to `console.log` only; the visible status log was removed from the login UI
 - **Environment switcher** — dropdown in the top nav bar (near Live badge) allows switching environments without logging out; triggers sign-out, re-auth with the new project's OAuth
 - **Time gate** — shows the time range (last-activity based) of currently loaded sessions in the session info bar
-- **Badge separation** — visitor settings badges (project, visitor type, language, WhatsApp, validated, lead/case/booking) shown in chat header; project and visitor type also shown in session list items; AI conversation badges (categories, request types, verified, end) shown only in session list items. Chat header shows message count but no type pills (human/ai/tool/system).
+- **Badge separation** — visitor settings badges (project, visitor type, language, WhatsApp, validated, lead/case/booking) shown in the detail sidebar; project and visitor type also shown in session list items; AI conversation badges (categories, request types, verified, end) shown only in session list items. Chat header shows only the session/conversation ID.
 
 ### CSS (index.html)
 
 - All styles are in a single `<style>` block in `index.html`
-- CSS custom properties (variables) defined in `:root` control the color palette, shadows (`--shadow-sm` through `--shadow-xl`), radii (`--radius-sm` through `--radius-full`), and z-index layers (`--z-sidebar`, `--z-dropdown`, `--z-overlay`, `--z-modal`)
+- CSS custom properties (variables) defined in `:root` control: color palette (including per-badge variables like `--badge-verified-bg`, `--badge-end-text`, `--pill-human-bg`, `--tool-text`, `--env-bg`, `--danger-light`), shadows (`--shadow-sm` through `--shadow-xl`), radii (`--radius-sm` through `--radius-full`), and z-index layers (`--z-sidebar`, `--z-dropdown`, `--z-overlay`, `--z-modal`). All badge, pill, and label colors use CSS variables — avoid introducing hardcoded hex values.
 - WhatsApp-inspired design: white left bubbles for customers, green right bubbles for AI, yellow center bubbles for tool calls
 - Responsive breakpoint at `768px` (mobile: sidebar overlays)
 - Accessibility: `prefers-reduced-motion` disables animations; `focus-visible` outlines on all interactive elements; ARIA attributes on modals (`role="dialog"`, `aria-modal`, `aria-labelledby`); `aria-live="polite"` on session count
@@ -300,9 +304,10 @@ The Edge Function:
   - `.content-area` — horizontal flex containing:
     - `#sidebar` — session info bar (count + time gate) and scrollable session list
     - `.chat-area` — wraps the header bar and `#chat-main`:
-      - `#chat-header-bar` — permanent header with `#chat-session-controls` (left: reviewed/feedback buttons, message count, type pills, visitor settings badges)
+      - `#chat-header-bar` — permanent header with `#chat-session-controls` (shows session/conversation ID when selected)
       - `#chat-main` — scrollable message area; wiped and repopulated on session switch
-- `app.js` is loaded with a cache-busting query param (`?v=52`) — increment this when deploying changes
+    - `#detail-sidebar` — right panel (320px), shown when a session is selected; contains session controls (reviewed/feedback/expand-collapse), in-session search, quick-jump buttons, duration, message pills, classification, tools, and visitor info
+- `app.js` is loaded with a cache-busting query param (`?v=54`) — increment this when deploying changes
 - Login panel contains only the environment selector (if multi-env), "Sign in with Google" button, and `#login-error`; no credential input fields, no status log
 
 ## Filtering Logic
@@ -342,7 +347,7 @@ Reviewed state is managed client-side (no database writes):
 
 1. **Edge function slug**: The file is `supabase/functions/chat-feedback/` and the frontend calls `db.functions.invoke('chat-feedback', ...)`. The deployed Supabase slug must match — if you redeploy under a different name, update the `invoke` call in `submitFeedback()` (`app.js`) accordingly.
 
-2. **Cache-busting**: `app.js` is loaded as `app.js?v=52`. Increment the version number when deploying updated `app.js` to avoid browsers serving stale cached versions. Forgetting this has caused runtime errors when HTML and JS are out of sync (e.g. removing a DOM element that old JS still references).
+2. **Cache-busting**: `app.js` is loaded as `app.js?v=53`. Increment the version number when deploying updated `app.js` to avoid browsers serving stale cached versions. Forgetting this has caused runtime errors when HTML and JS are out of sync (e.g. removing a DOM element that old JS still references).
 
 3. **config.js is required**: The login UI has no manual credential input fields. If `config.js` is absent and no credentials are saved in `localStorage`, the Google sign-in button will display an error. Always deploy `config.js` alongside `index.html`. Use the multi-env `environments` array format to expose a named dropdown for multiple Supabase projects.
 

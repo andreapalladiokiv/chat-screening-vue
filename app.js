@@ -59,6 +59,8 @@ const filterWhatsapp = document.getElementById('filter-whatsapp');
 const filterHasLead = document.getElementById('filter-has-lead');
 const filterHasCase = document.getElementById('filter-has-case');
 const filterHasBooking = document.getElementById('filter-has-booking');
+const filterVerified = document.getElementById('filter-verified');
+const filterEndConv = document.getElementById('filter-end-conv');
 const filterReviewed = document.getElementById('filter-reviewed');
 const filterClear = document.getElementById('filter-clear');
 const filterApply = document.getElementById('filter-apply');
@@ -455,6 +457,7 @@ async function afterAuthSuccess(user) {
     loginPanel.style.display = 'none';
     chatPanel.classList.add('active');
     setupEnvSwitcher();
+    initTimezone();
     populateFilters();
     renderSessionList();
     updateTimeGate();
@@ -507,6 +510,10 @@ async function handleLogout() {
   closeAdminModal();
   const sc = document.getElementById('chat-session-controls');
   if (sc) sc.innerHTML = '';
+  const hr = document.getElementById('chat-header-right');
+  if (hr) hr.innerHTML = '';
+  const ds = document.getElementById('detail-sidebar');
+  if (ds) { ds.innerHTML = ''; ds.classList.remove('active'); }
   chatPanel.classList.remove('active');
   loginPanel.style.display = 'flex';
   sessionList.innerHTML = '';
@@ -755,6 +762,8 @@ function renderFilterTags() {
     { el: filterHasLead, label: 'Has lead' },
     { el: filterHasCase, label: 'Has case' },
     { el: filterHasBooking, label: 'Has booking' },
+    { el: filterVerified, label: 'Verified' },
+    { el: filterEndConv, label: 'End conv.' },
   ];
   for (const bc of boolConfigs) {
     if (bc.el.value) {
@@ -1001,12 +1010,15 @@ async function applyFilters() {
   const hasLeadVal = filterHasLead.value;
   const hasCaseVal = filterHasCase.value;
   const hasBookingVal = filterHasBooking.value;
+  const verifiedVal = filterVerified.value;
+  const endConvVal = filterEndConv.value;
 
   // If no server-side filters specified, fall back to default load
   const hasServerFilters = dateFrom || dateTo || msgMin !== null || msgMax !== null
     || selectedTools.length > 0 || selectedCategories.length > 0 || selectedReqTypes.length > 0
     || selectedProjects.length > 0 || selectedVisitorTypes.length > 0 || selectedLanguages.length > 0
-    || validationVal || whatsappVal || hasLeadVal || hasCaseVal || hasBookingVal;
+    || validationVal || whatsappVal || hasLeadVal || hasCaseVal || hasBookingVal
+    || verifiedVal || endConvVal;
 
   if (!hasServerFilters) {
     // No server filters — reload default sessions
@@ -1143,6 +1155,8 @@ async function clearFilters() {
   filterValidation.value = '';
   filterWhatsapp.value = '';
   filterHasLead.value = '';
+  if (filterVerified) filterVerified.value = '';
+  if (filterEndConv) filterEndConv.value = '';
   filterHasCase.value = '';
   filterHasBooking.value = '';
   filterSort.value = 'newest';
@@ -1220,6 +1234,14 @@ function renderSessionList() {
   } else if (reviewedFilter === 'unreviewed') {
     filtered = filtered.filter((s) => !reviewedSessions.has(s.id));
   }
+
+  // Verified / End conversation client-side filters
+  const verifiedFilter = filterVerified ? filterVerified.value : '';
+  const endConvFilter = filterEndConv ? filterEndConv.value : '';
+  if (verifiedFilter === 'true') filtered = filtered.filter(s => s.hasVerified);
+  else if (verifiedFilter === 'false') filtered = filtered.filter(s => !s.hasVerified);
+  if (endConvFilter === 'true') filtered = filtered.filter(s => s.hasEndConversation);
+  else if (endConvFilter === 'false') filtered = filtered.filter(s => !s.hasEndConversation);
 
   // Sort
   filtered = [...filtered];
@@ -1450,24 +1472,25 @@ function parseMessage(row) {
     let content = msg.content;
     if (typeof content === 'string') {
       try {
-        const parsed = JSON.parse(content);
-        // Format system metadata nicely — show all key-value pairs
-        const keys = Object.keys(parsed);
-        if (keys.length > 0) {
-          const labels = { session_id: 'Session', client_id: 'Client', platform: 'Platform', project: 'Project' };
-          const parts = keys.map(k => {
-            const label = labels[k] || k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-            return label + ': ' + parsed[k];
-          });
-          result.text = parts.join(' · ');
-        } else {
-          result.text = JSON.stringify(parsed, null, 2);
-        }
+        content = JSON.parse(content);
       } catch {
         result.text = content;
+        result.systemParsed = null;
+        return result;
       }
+    }
+    // Store parsed object for structured rendering
+    if (content && typeof content === 'object' && Object.keys(content).length > 0) {
+      result.systemParsed = content;
+      const labels = { session_id: 'Session', client_id: 'Client', platform: 'Platform', project: 'Project' };
+      const parts = Object.keys(content).map(k => {
+        const label = labels[k] || k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        return label + ': ' + content[k];
+      });
+      result.text = parts.join(' · ');
     } else {
-      result.text = JSON.stringify(content, null, 2);
+      result.text = typeof content === 'string' ? content : JSON.stringify(content, null, 2);
+      result.systemParsed = null;
     }
   } else {
     result.text = JSON.stringify(msg, null, 2);
@@ -1476,38 +1499,158 @@ function parseMessage(row) {
   return result;
 }
 
+// ── Session Summary ──
+function formatDuration(ms) {
+  const secs = Math.floor(ms / 1000);
+  if (secs < 60) return secs + 's';
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return mins + 'm ' + (secs % 60) + 's';
+  const hrs = Math.floor(mins / 60);
+  return hrs + 'h ' + (mins % 60) + 'm';
+}
+
+function populateDetailSidebar(rows, sessionId) {
+  const sidebar = document.getElementById('detail-sidebar');
+  if (!sidebar) return;
+
+  const session = sessionMap.get(sessionId);
+  if (!session || rows.length === 0) {
+    sidebar.classList.remove('active');
+    return;
+  }
+
+  const isReviewed = reviewedSessions.has(sessionId);
+
+  // Duration
+  const first = new Date(rows[0].created_at);
+  const last = new Date(rows[rows.length - 1].created_at);
+  const duration = formatDuration(last - first);
+
+  // Type pills
+  const typePills = buildTypePillsHtml(session.typeCounts);
+
+  // Classification from last AI final response
+  let classification = '';
+  for (let i = rows.length - 1; i >= 0; i--) {
+    try {
+      const msg = typeof rows[i].message === 'string' ? JSON.parse(rows[i].message) : rows[i].message;
+      if (msg.type === 'ai' && (!msg.tool_calls || msg.tool_calls.length === 0)) {
+        let content = msg.content;
+        if (typeof content === 'string') content = JSON.parse(content);
+        if (content && content.output) {
+          const badges = [];
+          if (content.output.request_category) badges.push(`<span class="badge">${escapeHtml(content.output.request_category)}</span>`);
+          if (content.output.request_type) badges.push(`<span class="badge">${escapeHtml(content.output.request_type)}</span>`);
+          if (content.output.identity_verified) badges.push('<span class="badge verified">verified</span>');
+          if (content.output.end_conversation) badges.push('<span class="badge end-conv">end</span>');
+          classification = badges.join('');
+          break;
+        }
+      }
+    } catch { /* skip */ }
+  }
+
+  // Tools used
+  const toolsHtml = session.tools.length
+    ? session.tools.map(t => `<span class="summary-tool-tag">${escapeHtml(t)}</span>`).join('')
+    : '<span style="color:var(--text-secondary);font-size:12px;">none</span>';
+
+  // Visitor info
+  const visitorInfoHtml = buildVisitorInfoHtml(session);
+
+  sidebar.innerHTML = `
+    <div class="detail-sidebar-section detail-sidebar-actions">
+      <button class="chat-reviewed-btn${isReviewed ? ' reviewed-active' : ''}" id="chat-reviewed-btn">${isReviewed ? 'Reviewed \u2713' : 'Mark Reviewed'}</button>
+      <button class="chat-feedback-btn" id="chat-feedback-btn">Feedback</button>
+      <button class="tool-toggle-btn" id="tool-toggle-btn" title="Expand or collapse all tool details">Expand All</button>
+    </div>
+    <div class="detail-sidebar-section detail-sidebar-search" id="detail-sidebar-search"></div>
+    <div class="detail-sidebar-section">
+      <span class="detail-sidebar-label">Quick Jump</span>
+      <div class="summary-jump-btns">
+        <button class="summary-jump-btn" data-jump="ai">First AI</button>
+        <button class="summary-jump-btn" data-jump="tool">First Tool</button>
+        <button class="summary-jump-btn" data-jump="last">Last</button>
+      </div>
+    </div>
+    <div class="detail-sidebar-section">
+      <span class="detail-sidebar-label">Duration</span>
+      <span class="summary-duration">${duration}</span>
+    </div>
+    <div class="detail-sidebar-section">
+      <span class="detail-sidebar-label">Messages</span>
+      <div class="type-counts">${typePills}</div>
+    </div>
+    ${classification ? `<div class="detail-sidebar-section">
+      <span class="detail-sidebar-label">Result</span>
+      <div class="badges">${classification}</div>
+    </div>` : ''}
+    <div class="detail-sidebar-section">
+      <span class="detail-sidebar-label">Tools Used</span>
+      <div class="summary-tools">${toolsHtml}</div>
+    </div>
+    ${visitorInfoHtml ? `<div class="detail-sidebar-section">
+      <span class="detail-sidebar-label">Visitor</span>
+      ${visitorInfoHtml}
+    </div>` : ''}
+  `;
+
+  sidebar.classList.add('active');
+
+  // Wire up action buttons
+  sidebar.querySelector('#chat-reviewed-btn').addEventListener('click', () => toggleReviewed(sessionId));
+
+  sidebar.querySelector('#chat-feedback-btn').addEventListener('click', () => {
+    openFeedbackModal('chat', { session_id: sessionId, message_count: rows.length });
+  });
+
+  sidebar.querySelector('#tool-toggle-btn').addEventListener('click', function () {
+    const details = chatMain.querySelectorAll('.tool-details');
+    const allOpen = Array.from(details).every(d => d.open);
+    details.forEach(d => d.open = !allOpen);
+    this.textContent = allOpen ? 'Expand All' : 'Collapse All';
+  });
+
+  // In-session search
+  const searchContainer = sidebar.querySelector('#detail-sidebar-search');
+  initSessionSearch(searchContainer);
+
+  // Jump button listeners
+  const container = chatMain.querySelector('.messages-container');
+  if (container) {
+    sidebar.querySelectorAll('.summary-jump-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const target = btn.dataset.jump;
+        let el;
+        if (target === 'ai') el = container.querySelector('.message-wrapper.ai');
+        else if (target === 'tool') el = container.querySelector('.message-wrapper.tool');
+        else if (target === 'last') el = container.querySelector('.message-wrapper:last-of-type');
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    });
+  }
+}
+
 // ── Message Rendering ──
 function renderMessages(rows, sessionId) {
   chatMain.innerHTML = '';
 
-  // Count message types
-  const headerCounts = { human: 0, ai: 0, tool: 0, system: 0 };
-  for (const row of rows) {
-    try {
-      const msg = typeof row.message === 'string' ? JSON.parse(row.message) : row.message;
-      const t = msg && msg.type;
-      if (headerCounts[t] !== undefined) headerCounts[t]++;
-    } catch { /* skip */ }
-  }
-
-  // Chat header — update permanent session controls bar
-  const isReviewed = reviewedSessions.has(sessionId);
+  // Chat header — show session ID only
   const sessionControls = document.getElementById('chat-session-controls');
   const session = sessionMap.get(sessionId);
-  const visitorInfoHtml = buildVisitorInfoHtml(session);
-  sessionControls.innerHTML = `
-    <button class="chat-reviewed-btn${isReviewed ? ' reviewed-active' : ''}" id="chat-reviewed-btn">${isReviewed ? 'Reviewed ✓' : 'Mark Reviewed'}</button>
-    <button class="chat-feedback-btn" id="chat-feedback-btn">Feedback</button>
-    <span class="meta-info">${rows.length} messages</span>
-    ${visitorInfoHtml}
-  `;
-
-  sessionControls.querySelector('#chat-reviewed-btn').addEventListener('click', () => toggleReviewed(sessionId));
-
-  sessionControls.querySelector('#chat-feedback-btn').addEventListener('click', () => {
-    openFeedbackModal('chat', { session_id: sessionId, message_count: rows.length });
+  const displayId = (session && session.conversationId) || sessionId;
+  sessionControls.innerHTML = `<h3 class="session-id-copy" title="Click to copy session ID">${escapeHtml(displayId)}</h3>`;
+  sessionControls.querySelector('.session-id-copy').addEventListener('click', () => {
+    navigator.clipboard.writeText(sessionId).then(() => {
+      const el = sessionControls.querySelector('.session-id-copy');
+      el.classList.add('copied');
+      const orig = el.textContent;
+      el.textContent = 'Copied!';
+      setTimeout(() => { el.textContent = orig; el.classList.remove('copied'); }, 1200);
+    });
   });
-
+  const headerRight = document.getElementById('chat-header-right');
+  headerRight.innerHTML = '';
 
   // Messages container
   const container = document.createElement('div');
@@ -1539,11 +1682,28 @@ function renderMessages(rows, sessionId) {
       wrapper.appendChild(createSystemBubble(parsed));
     }
 
-    // Hover feedback button on every message
+    // Action buttons group (copy + feedback) — inline next to bubble
+    const actionGroup = document.createElement('div');
+    actionGroup.className = 'msg-action-group';
+
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'msg-copy-btn';
+    copyBtn.title = 'Copy message text';
+    copyBtn.textContent = 'Copy';
+    const copyText = parsed.text || '';
+    copyBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      navigator.clipboard.writeText(copyText).then(() => {
+        copyBtn.textContent = 'Copied!';
+        setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1200);
+      });
+    });
+    actionGroup.appendChild(copyBtn);
+
     const fbBtn = document.createElement('button');
     fbBtn.className = 'feedback-hover-btn';
     fbBtn.title = 'Leave feedback on this message';
-    fbBtn.textContent = '\uD83D\uDCAC'; // speech bubble
+    fbBtn.textContent = '\uD83D\uDCAC';
     fbBtn.addEventListener('click', () => {
       openFeedbackModal('message', {
         session_id: sessionId,
@@ -1555,10 +1715,14 @@ function renderMessages(rows, sessionId) {
         raw: parsed.raw,
       });
     });
-    wrapper.appendChild(fbBtn);
+    actionGroup.appendChild(fbBtn);
 
+    wrapper.appendChild(actionGroup);
     container.appendChild(wrapper);
   }
+
+  // Populate right detail sidebar
+  populateDetailSidebar(rows, sessionId);
 
   // Scroll to bottom
   container.scrollTop = container.scrollHeight;
@@ -1589,7 +1753,24 @@ function appendRealtimeMessage(row) {
     wrapper.appendChild(createSystemBubble(parsed));
   }
 
-  // Feedback hover button (same pattern as renderMessages)
+  // Action buttons group (same pattern as renderMessages)
+  const actionGroup = document.createElement('div');
+  actionGroup.className = 'msg-action-group';
+
+  const copyBtn = document.createElement('button');
+  copyBtn.className = 'msg-copy-btn';
+  copyBtn.title = 'Copy message text';
+  copyBtn.textContent = 'Copy';
+  const copyText = parsed.text || '';
+  copyBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(copyText).then(() => {
+      copyBtn.textContent = 'Copied!';
+      setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1200);
+    });
+  });
+  actionGroup.appendChild(copyBtn);
+
   const fbBtn = document.createElement('button');
   fbBtn.className = 'feedback-hover-btn';
   fbBtn.title = 'Leave feedback on this message';
@@ -1605,18 +1786,13 @@ function appendRealtimeMessage(row) {
       raw: parsed.raw,
     });
   });
-  wrapper.appendChild(fbBtn);
+  actionGroup.appendChild(fbBtn);
 
+  wrapper.appendChild(actionGroup);
   container.appendChild(wrapper);
   container.scrollTop = container.scrollHeight;
 
-  // Update header message count and type pills
-  const session = sessionMap.get(currentSessionId);
-  const sessionControls = document.getElementById('chat-session-controls');
-  const metaEl = sessionControls && sessionControls.querySelector('.meta-info');
-  if (metaEl && session) metaEl.textContent = session.count + ' messages';
-  const pillsEl = sessionControls && sessionControls.querySelector('.chat-header-counts');
-  if (pillsEl && session) pillsEl.innerHTML = buildTypePillsHtml(session.typeCounts);
+  // Note: sidebar type pills are static from render time; will refresh on next session select
 }
 
 function createHumanBubble(parsed) {
@@ -1689,7 +1865,7 @@ function createToolCallBubble(parsed) {
   }
 
   el.innerHTML = `
-    <div class="message-label" style="color: #856404;">Tool Call: ${escapeHtml(toolNames)}</div>
+    <div class="message-label tool-label">Tool Call: ${escapeHtml(toolNames)}</div>
     ${parsed.text ? `<div class="message-text">${escapeHtml(parsed.text)}</div>` : ''}
     ${detailsHtml}
     <div class="message-time">${formatTime(parsed.timestamp)}</div>
@@ -1702,7 +1878,7 @@ function createToolResultBubble(parsed) {
   el.className = 'message tool-bubble';
 
   el.innerHTML = `
-    <div class="message-label" style="color: #856404;">Tool Result: ${escapeHtml(parsed.toolName)}</div>
+    <div class="message-label tool-label">Tool Result: ${escapeHtml(parsed.toolName)}</div>
     <details class="tool-details">
       <summary>Show response</summary>
       <pre>${escapeHtml(parsed.text)}</pre>
@@ -1715,8 +1891,129 @@ function createToolResultBubble(parsed) {
 function createSystemBubble(parsed) {
   const el = document.createElement('div');
   el.className = 'message system-bubble';
-  el.innerHTML = `<div class="message-text">${escapeHtml(parsed.text)}</div>`;
+
+  if (parsed.systemParsed) {
+    const labels = { session_id: 'Session', client_id: 'Client', platform: 'Platform', project: 'Project' };
+    const gridItems = Object.entries(parsed.systemParsed).map(([k, v]) => {
+      const label = labels[k] || k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      return `<span class="system-grid-label">${escapeHtml(label)}</span><span class="system-grid-value">${escapeHtml(String(v))}</span>`;
+    }).join('');
+    el.innerHTML = `<div class="system-grid">${gridItems}</div>`;
+  } else {
+    el.innerHTML = `<div class="message-text">${escapeHtml(parsed.text)}</div>`;
+  }
   return el;
+}
+
+// ── In-Session Search ──
+let sessionSearchMatches = [];
+let sessionSearchIndex = -1;
+
+function initSessionSearch(headerRight) {
+  const bar = document.createElement('div');
+  bar.className = 'session-search-bar';
+  bar.innerHTML = `
+    <input type="text" id="session-msg-search" placeholder="Search messages..." />
+    <span class="session-search-count" id="session-search-count"></span>
+    <div class="session-search-nav">
+      <button id="session-search-prev" title="Previous match">&#9650;</button>
+      <button id="session-search-next" title="Next match">&#9660;</button>
+    </div>
+  `;
+  headerRight.appendChild(bar);
+
+  const input = bar.querySelector('#session-msg-search');
+  const countEl = bar.querySelector('#session-search-count');
+  const prevBtn = bar.querySelector('#session-search-prev');
+  const nextBtn = bar.querySelector('#session-search-next');
+  let debounce = null;
+
+  input.addEventListener('input', () => {
+    clearTimeout(debounce);
+    const msgContainer = chatMain.querySelector('.messages-container');
+    if (msgContainer) {
+      debounce = setTimeout(() => performSessionSearch(msgContainer, input.value, countEl), 300);
+    }
+  });
+  prevBtn.addEventListener('click', () => {
+    const msgContainer = chatMain.querySelector('.messages-container');
+    if (msgContainer) navigateMatch(msgContainer, countEl, -1);
+  });
+  nextBtn.addEventListener('click', () => {
+    const msgContainer = chatMain.querySelector('.messages-container');
+    if (msgContainer) navigateMatch(msgContainer, countEl, 1);
+  });
+}
+
+function performSessionSearch(container, query, countEl) {
+  // Clear previous highlights
+  container.querySelectorAll('mark.search-highlight').forEach(m => {
+    const parent = m.parentNode;
+    parent.replaceChild(document.createTextNode(m.textContent), m);
+    parent.normalize();
+  });
+  sessionSearchMatches = [];
+  sessionSearchIndex = -1;
+
+  if (!query || query.length < 2) {
+    countEl.textContent = '';
+    return;
+  }
+
+  const regex = new RegExp(escapeRegex(query), 'gi');
+  const textEls = container.querySelectorAll('.message-text, .tool-details pre');
+
+  textEls.forEach(el => {
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    const nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+
+    for (const node of nodes) {
+      const text = node.textContent;
+      if (!regex.test(text)) continue;
+      regex.lastIndex = 0;
+
+      const frag = document.createDocumentFragment();
+      let lastIdx = 0;
+      let match;
+      while ((match = regex.exec(text)) !== null) {
+        if (match.index > lastIdx) {
+          frag.appendChild(document.createTextNode(text.slice(lastIdx, match.index)));
+        }
+        const mark = document.createElement('mark');
+        mark.className = 'search-highlight';
+        mark.textContent = match[0];
+        frag.appendChild(mark);
+        lastIdx = regex.lastIndex;
+      }
+      if (lastIdx < text.length) {
+        frag.appendChild(document.createTextNode(text.slice(lastIdx)));
+      }
+      node.parentNode.replaceChild(frag, node);
+    }
+  });
+
+  sessionSearchMatches = Array.from(container.querySelectorAll('mark.search-highlight'));
+  countEl.textContent = sessionSearchMatches.length ? `0 / ${sessionSearchMatches.length}` : 'No results';
+  if (sessionSearchMatches.length) navigateMatch(container, countEl, 1);
+}
+
+function navigateMatch(container, countEl, dir) {
+  if (!sessionSearchMatches.length) return;
+  if (sessionSearchIndex >= 0 && sessionSearchMatches[sessionSearchIndex]) {
+    sessionSearchMatches[sessionSearchIndex].classList.remove('active');
+  }
+  sessionSearchIndex += dir;
+  if (sessionSearchIndex >= sessionSearchMatches.length) sessionSearchIndex = 0;
+  if (sessionSearchIndex < 0) sessionSearchIndex = sessionSearchMatches.length - 1;
+  const m = sessionSearchMatches[sessionSearchIndex];
+  m.classList.add('active');
+  m.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  countEl.textContent = `${sessionSearchIndex + 1} / ${sessionSearchMatches.length}`;
+}
+
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 // ── Feedback ──
@@ -1838,7 +2135,43 @@ function escapeHtml(str) {
   return str.replace(/[&<>"']/g, (c) => map[c]);
 }
 
-const TIME_ZONE = 'Europe/Chisinau';
+// Configurable timezone — defaults to browser timezone, persisted in localStorage
+function getTimeZone() {
+  return localStorage.getItem('chat_view_timezone') || Intl.DateTimeFormat().resolvedOptions().timeZone;
+}
+function setTimeZone(tz) {
+  localStorage.setItem('chat_view_timezone', tz);
+  // Update the visible indicator
+  const indicator = document.getElementById('tz-indicator');
+  if (indicator) indicator.textContent = tz;
+}
+// For compatibility with existing code that uses TIME_ZONE directly
+let TIME_ZONE = getTimeZone();
+
+// Initialize timezone indicator and click handler
+function initTimezone() {
+  const indicator = document.getElementById('tz-indicator');
+  const btn = document.getElementById('tz-btn');
+  if (indicator) indicator.textContent = getTimeZone();
+  if (btn) {
+    btn.addEventListener('click', () => {
+      const current = getTimeZone();
+      const tz = prompt('Enter timezone (e.g. Europe/Chisinau, America/New_York, UTC):', current);
+      if (tz && tz.trim()) {
+        try {
+          // Validate the timezone
+          Intl.DateTimeFormat(undefined, { timeZone: tz.trim() });
+          setTimeZone(tz.trim());
+          TIME_ZONE = tz.trim();
+          // Re-render current session if one is open
+          if (currentSessionId) selectSession(currentSessionId);
+        } catch {
+          alert('Invalid timezone: ' + tz.trim());
+        }
+      }
+    });
+  }
+}
 
 // Populate and show the environment switcher in the sidebar header
 function setupEnvSwitcher() {
@@ -2078,3 +2411,71 @@ async function openUsersModal() {
     usersModalBody.innerHTML = '<div class="users-dropdown-empty">Failed to load users.</div>';
   }
 }
+
+// ── Keyboard Shortcuts ──
+document.addEventListener('keydown', (e) => {
+  // Skip when typing in an input/textarea
+  const tag = document.activeElement?.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+  const key = e.key.toLowerCase();
+
+  // J/K: navigate sessions
+  if (key === 'j' || key === 'k') {
+    const items = Array.from(sessionList.querySelectorAll('.session-item'));
+    if (!items.length) return;
+    const curIdx = items.findIndex(li => li.classList.contains('active'));
+    let nextIdx;
+    if (key === 'j') nextIdx = curIdx < items.length - 1 ? curIdx + 1 : 0;
+    else nextIdx = curIdx > 0 ? curIdx - 1 : items.length - 1;
+    const sid = items[nextIdx].dataset.sessionId;
+    if (sid) selectSession(sid);
+    items[nextIdx].scrollIntoView({ block: 'nearest' });
+    e.preventDefault();
+  }
+
+  // E: expand/collapse all tool details
+  if (key === 'e') {
+    const toggleBtn = document.getElementById('tool-toggle-btn');
+    if (toggleBtn) toggleBtn.click();
+    e.preventDefault();
+  }
+
+  // R: toggle reviewed
+  if (key === 'r' && currentSessionId) {
+    toggleReviewed(currentSessionId);
+    e.preventDefault();
+  }
+
+  // F: open feedback modal
+  if (key === 'f' && currentSessionId) {
+    const fbBtn = document.getElementById('chat-feedback-btn');
+    if (fbBtn) fbBtn.click();
+    e.preventDefault();
+  }
+
+  // /: focus session search
+  if (key === '/') {
+    sessionSearch.focus();
+    e.preventDefault();
+  }
+
+  // Escape: close modals/panels
+  if (key === 'escape') {
+    closeFeedbackModal();
+    if (usersModalOverlay.classList.contains('open')) usersModalOverlay.classList.remove('open');
+    const adminOverlay = document.getElementById('admin-modal-overlay');
+    if (adminOverlay && adminOverlay.style.display !== 'none') adminOverlay.style.display = 'none';
+    // Close filter popover
+    const fpOverlay = document.getElementById('filter-popover-overlay');
+    const fp = document.getElementById('filter-popover');
+    if (fpOverlay) fpOverlay.classList.remove('open');
+    if (fp) fp.classList.remove('open');
+  }
+
+  // Ctrl+Shift+F: focus in-session search
+  if (key === 'f' && e.ctrlKey && e.shiftKey) {
+    const msgSearch = document.getElementById('session-msg-search');
+    if (msgSearch) { msgSearch.focus(); e.preventDefault(); }
+  }
+});
