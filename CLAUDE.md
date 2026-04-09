@@ -306,7 +306,7 @@ The Edge Function:
     - `.chat-area` — wraps the header bar and `#chat-main`:
       - `#chat-header-bar` — permanent header with `#chat-session-controls` (shows session/conversation ID when selected)
       - `#chat-main` — scrollable message area; wiped and repopulated on session switch
-    - `#detail-sidebar` — right panel (280px), shown when a session is selected; contains session controls (reviewed/feedback/expand-collapse), in-session search, quick-jump buttons, duration, message pills, classification, tools, and visitor info
+    - `#detail-sidebar` — right panel (320px), shown when a session is selected; contains session controls (reviewed/feedback/expand-collapse), in-session search, quick-jump buttons, duration, message pills, classification, tools, and visitor info
 - `app.js` is loaded with a cache-busting query param (`?v=54`) — increment this when deploying changes
 - Login panel contains only the environment selector (if multi-env), "Sign in with Google" button, and `#login-error`; no credential input fields, no status log
 

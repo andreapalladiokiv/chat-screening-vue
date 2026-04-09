@@ -993,6 +993,7 @@
       align-items: flex-start;
       gap: 4px;
       margin-bottom: 2px;
+      position: relative;
     }
 
     .message-wrapper.human { justify-content: flex-start; }
@@ -1011,6 +1012,14 @@
     .message-wrapper:hover .msg-action-group { display: flex; }
     /* AI messages: actions go before the bubble (left side) */
     .message-wrapper.ai .msg-action-group { order: -1; }
+    /* Centered messages (tool/system): absolute position so they don't shift the bubble */
+    .message-wrapper.tool .msg-action-group,
+    .message-wrapper.system .msg-action-group {
+      position: absolute;
+      right: 4px;
+      top: 2px;
+      flex-direction: row;
+    }
 
     .msg-copy-btn,
     .feedback-hover-btn {
@@ -1242,8 +1251,8 @@
 
     /* Detail Sidebar (right panel) */
     .detail-sidebar {
-      width: 280px;
-      min-width: 220px;
+      width: 320px;
+      min-width: 260px;
       flex-shrink: 0;
       background: var(--sidebar-bg);
       border-left: 1px solid var(--border);
@@ -1327,11 +1336,10 @@
     .detail-sidebar-actions .chat-reviewed-btn,
     .detail-sidebar-actions .chat-feedback-btn,
     .detail-sidebar-actions .tool-toggle-btn {
-      flex: 1;
-      min-width: 0;
+      flex: 1 1 auto;
       text-align: center;
       font-size: 12px;
-      padding: 5px 6px;
+      padding: 6px 8px;
     }
     .detail-sidebar-search {
       padding-top: 8px !important;
