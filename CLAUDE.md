@@ -323,7 +323,7 @@ Filtering is split between server-side (RPC) and client-side:
 - **Has lead / Has case / Has booking** — boolean presence filters (via `visitors_settings`)
 
 **Server-side search (debounced, via search input):**
-- **Session ID search** — ILIKE substring match on `session_id` across the entire database; 400ms debounce; returns up to 50 results
+- **Session ID / Conversation ID search** — ILIKE substring match on `session_id` or `visitors_settings.conversation_id` across the entire database; 400ms debounce; returns up to 50 results
 
 **Client-side (instant, in `renderSessionList()`):**
 - **Sort** — newest / oldest / most messages / fewest messages (sorts loaded sessions only)

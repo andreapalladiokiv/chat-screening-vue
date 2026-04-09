@@ -68,13 +68,19 @@ BEGIN
   IF NOT v_has_meta_filters AND NOT v_has_vs_filters THEN
     -- FAST PATH: No metadata or visitor-settings filters needed.
     -- Simple GROUP BY uses the session_id index — no JSONB parsing.
+    -- When searching by p_session_id, also match visitors_settings.conversation_id.
     SELECT array_agg(sub.session_id) INTO v_session_ids
     FROM (
       SELECT cm.session_id
       FROM   chat_messages cm
       WHERE  (v_date_from IS NULL OR cm.created_at >= v_date_from)
         AND  (v_date_to   IS NULL OR cm.created_at <= v_date_to)
-        AND  (p_session_id IS NULL OR cm.session_id ILIKE '%' || p_session_id || '%')
+        AND  (p_session_id IS NULL
+              OR cm.session_id ILIKE '%' || p_session_id || '%'
+              OR cm.session_id IN (
+                SELECT vs.session_id FROM visitors_settings vs
+                WHERE vs.conversation_id ILIKE '%' || p_session_id || '%'
+              ))
       GROUP BY cm.session_id
       HAVING (v_cursor  IS NULL OR MAX(cm.created_at) < v_cursor)
         AND  (p_msg_min IS NULL OR COUNT(*) >= p_msg_min)
@@ -96,7 +102,12 @@ BEGIN
       FROM   chat_messages
       WHERE  (v_date_from IS NULL OR created_at >= v_date_from)
         AND  (v_date_to   IS NULL OR created_at <= v_date_to)
-        AND  (p_session_id IS NULL OR session_id ILIKE '%' || p_session_id || '%')
+        AND  (p_session_id IS NULL
+              OR session_id ILIKE '%' || p_session_id || '%'
+              OR session_id IN (
+                SELECT vs.session_id FROM visitors_settings vs
+                WHERE vs.conversation_id ILIKE '%' || p_session_id || '%'
+              ))
     ),
     msg_tools AS (
       SELECT DISTINCT b.session_id, tc.val->>'name' AS tool_name
