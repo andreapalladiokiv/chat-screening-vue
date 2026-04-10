@@ -140,7 +140,7 @@ Update this file whenever a feature is added, changed, or completed.
 - [x] "Searching..." indicator in session list during server-side search
 - [x] **Empty states** — "No sessions found" or "No sessions match your filters" with Clear Filters action link
 - [x] **Copy session ID** — hover over session ID in session list to reveal copy button; click copies to clipboard with visual feedback (✓)
-- [x] **Shareable session URLs** — `?session=<id>` URL param; auto-selects session on load; updated via `history.replaceState`
+- [x] **Shareable session deep links** — `?session=<id>` URL param; auto-selects session on page load and refresh via `autoSelectSessionFromURL()`; fetches session via RPC if not in loaded list; `?session=` param preserved through OAuth redirects; updated via `history.replaceState`
 - [x] **Session ID overflow** — long session IDs truncated with ellipsis in sidebar
 - [x] Global JS error handler shows errors in the browser console
 - [x] CDN load error handler for Supabase library (error shown in `#login-error`)

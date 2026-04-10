@@ -386,7 +386,7 @@ async function handleGoogleSignIn() {
 
   const { error } = await db.auth.signInWithOAuth({
     provider: 'google',
-    options: { redirectTo: window.location.origin + window.location.pathname },
+    options: { redirectTo: window.location.origin + window.location.pathname + window.location.search },
   });
 
   if (error) {
@@ -482,6 +482,9 @@ async function afterAuthSuccess(user) {
     renderSessionList();
     updateTimeGate();
     subscribeRealtime();
+
+    // Auto-select session from URL ?session=<id> (shareable deep links)
+    await autoSelectSessionFromURL();
   } catch (err) {
     logStatus('FAILED: ' + (err.message || String(err)));
     const msg = err.message || String(err);
@@ -562,11 +565,7 @@ async function handleRefresh() {
       populateFilters();
       renderSessionList();
       updateTimeGate();
-      // Auto-select session from URL ?session=<id> (shareable links)
-      const urlSession = new URL(window.location).searchParams.get('session');
-      if (urlSession && sessionMap.has(urlSession)) {
-        selectSession(urlSession);
-      }
+      await autoSelectSessionFromURL();
     } else {
       sessionCount.textContent = 'No sessions found.';
     }
@@ -574,6 +573,38 @@ async function handleRefresh() {
   refreshBtn.disabled = false;
   refreshBtn.textContent = 'Refresh';
   subscribeRealtime();
+}
+
+// ── Auto-select session from URL ──
+
+async function autoSelectSessionFromURL() {
+  const urlSession = new URL(window.location).searchParams.get('session');
+  if (!urlSession) return;
+
+  // Session is already in the loaded list — select it directly
+  if (sessionMap.has(urlSession)) {
+    selectSession(urlSession);
+    return;
+  }
+
+  // Session not in loaded list — fetch it specifically via RPC
+  try {
+    const { data, error } = await db.rpc('get_session_list', { p_session_id: urlSession, p_limit: 1 });
+    if (error || !data) {
+      console.warn('[url] Failed to fetch linked session:', error);
+      return;
+    }
+    const fetched = parseSessionResults(data);
+    if (fetched.length > 0) {
+      // Prepend to session list so it appears at the top
+      allSessions.unshift(fetched[0]);
+      sessionMap.set(fetched[0].id, fetched[0]);
+      renderSessionList();
+      selectSession(urlSession);
+    }
+  } catch (err) {
+    console.warn('[url] Error fetching linked session:', err.message);
+  }
 }
 
 // ── Realtime ──
@@ -2250,7 +2281,7 @@ async function handleEnvSwitch() {
 
   const { error } = await db.auth.signInWithOAuth({
     provider: 'google',
-    options: { redirectTo: window.location.origin + window.location.pathname },
+    options: { redirectTo: window.location.origin + window.location.pathname + window.location.search },
   });
 
   if (error) {
