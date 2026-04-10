@@ -498,11 +498,11 @@ async function afterAuthSuccess(user) {
     const hasConfigFilters = loadFilterOptionsFromConfig();
     const sessionsPromise = loadDefaultSessions();
     if (!hasConfigFilters) await loadFilterOptionsFromRPC();
-    const sessionsOk = await sessionsPromise;
+    const sessionsResult = await sessionsPromise;
 
-    if (!sessionsOk) {
-      logStatus('Failed to load sessions. Staying on login screen.');
-      showLoginError('Failed to load sessions. The get_session_list RPC may be missing or inaccessible. Check the Supabase SQL Editor.');
+    if (!sessionsResult.ok) {
+      logStatus('Failed to load sessions: ' + sessionsResult.error);
+      showLoginError('Failed to load sessions: ' + sessionsResult.error);
       db = null;
       currentUser = null;
       return;
@@ -943,34 +943,42 @@ function parseSessionResults(rows) {
   }));
 }
 
-// Default load: most recent 50 sessions, no filters
+// Default load: most recent 50 sessions, no filters.
+// Returns { ok: true } on success or { ok: false, error: string } on failure.
 async function loadDefaultSessions() {
   filtersApplied = false;
   currentFilterParams = null;
   sessionCursor = null;
   noMoreSessions = false;
 
-  try {
-    const { data, error } = await db.rpc('get_session_list', { p_limit: 50 });
-    if (error) {
-      logStatus('Session fetch ERROR: ' + (error.message || JSON.stringify(error)));
-      console.error('Failed to load sessions:', error);
-      return false;
-    }
+  const MAX_RETRIES = 2;
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const { data, error } = await db.rpc('get_session_list', { p_limit: 50 });
+      if (error) {
+        const errMsg = error.message || error.details || JSON.stringify(error);
+        logStatus('Session fetch ERROR (attempt ' + attempt + '/' + MAX_RETRIES + '): ' + errMsg);
+        console.error('Failed to load sessions:', error);
+        if (attempt < MAX_RETRIES) { await new Promise(r => setTimeout(r, 2000)); continue; }
+        return { ok: false, error: errMsg };
+      }
 
-    allSessions = parseSessionResults(data);
-    rebuildSessionMap();
-    if (allSessions.length > 0) {
-      sessionCursor = allSessions[allSessions.length - 1].latest;
-    }
-    if (allSessions.length < 50) noMoreSessions = true;
+      allSessions = parseSessionResults(data);
+      rebuildSessionMap();
+      if (allSessions.length > 0) {
+        sessionCursor = allSessions[allSessions.length - 1].latest;
+      }
+      if (allSessions.length < 50) noMoreSessions = true;
 
-    logStatus('Loaded ' + allSessions.length + ' sessions via RPC.');
-    return true;
-  } catch (err) {
-    logStatus('Session fetch FAILED: ' + (err.message || String(err)));
-    console.error('loadDefaultSessions error:', err);
-    return false;
+      logStatus('Loaded ' + allSessions.length + ' sessions via RPC.');
+      return { ok: true };
+    } catch (err) {
+      const errMsg = err.message || String(err);
+      logStatus('Session fetch FAILED (attempt ' + attempt + '/' + MAX_RETRIES + '): ' + errMsg);
+      console.error('loadDefaultSessions error:', err);
+      if (attempt < MAX_RETRIES) { await new Promise(r => setTimeout(r, 2000)); continue; }
+      return { ok: false, error: errMsg };
+    }
   }
 }
 
