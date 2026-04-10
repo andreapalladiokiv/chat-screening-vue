@@ -312,15 +312,35 @@ async function loadFilterOptionsFromRPC() {
 
   if (projectId && key && window.supabase && window.supabase.createClient) {
     initSupabaseClient(projectId, key);
+
+    // Listen for auth state changes — handles OAuth redirect callback,
+    // token refresh, and sign-out events throughout the session lifetime.
+    let authHandled = false;
+    db.auth.onAuthStateChange(async (event, session) => {
+      console.log('[auth] State change:', event);
+      if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') && session?.user) {
+        if (authHandled) return; // avoid duplicate calls
+        authHandled = true;
+        await afterAuthSuccess(session.user);
+      } else if (event === 'SIGNED_OUT') {
+        // Token expired and could not be refreshed — clean up
+        if (chatPanel.classList.contains('active')) {
+          handleLogout();
+        }
+      }
+    });
+
+    // Fast-path: check for an already-stored session synchronously.
+    // If found, afterAuthSuccess will be called via the onAuthStateChange INITIAL_SESSION event above.
     try {
       const { data: { session } } = await db.auth.getSession();
       if (session && session.user) {
-        await afterAuthSuccess(session.user);
+        // The onAuthStateChange INITIAL_SESSION handler will pick this up
         return;
       }
     } catch (err) {
       console.warn('[auth] Failed to restore session:', err.message);
-      // Fall through to show login panel
+      // Fall through to show login panel; onAuthStateChange may still fire
     }
   }
 

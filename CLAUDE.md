@@ -92,6 +92,8 @@ When `environments` has 2+ entries, an **"Environment"** `<select>` dropdown app
 
 Credentials and the selected environment index are persisted in `localStorage` (`sb_project_id`, `sb_key`, `sb_selected_env`) after the first successful OAuth redirect, so subsequent visits restore the correct environment without re-reading `config.js`.
 
+**Persistent auth sessions**: The app uses `onAuthStateChange` to listen for Supabase auth events (`INITIAL_SESSION`, `SIGNED_IN`, `TOKEN_REFRESHED`, `SIGNED_OUT`). This keeps users logged in across page reloads and handles OAuth redirect callbacks, token refreshes, and session expiry gracefully. A fast-path `getSession()` call is still made on init for immediate restoration of stored sessions.
+
 ## Database Schema
 
 The app reads from a `chat_messages` table (not created in this repo — it must pre-exist) and writes feedback to a `chat_feedback` table.
