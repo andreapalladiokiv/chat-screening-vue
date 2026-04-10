@@ -14,7 +14,7 @@ Update this file whenever a feature is added, changed, or completed.
 - [x] Per-environment `allowedDomains` — each environment can restrict sign-in to different email domains
 - [x] Credentials and selected environment index persisted in `localStorage` (`sb_project_id`, `sb_key`, `sb_selected_env`) across page reloads and OAuth redirects
 - [x] Environment dropdown selection restored on page reload and after OAuth redirect
-- [x] **Persistent auth sessions** — `getSession()` restores stored sessions on init (auto-exchanges OAuth hash tokens); `setupAuthListener()` monitors `SIGNED_OUT` for auto-logout on token expiry
+- [x] **Persistent auth sessions** — `onAuthStateChange` with `INITIAL_SESSION` event restores sessions on init (handles OAuth hash token exchange reliably across Supabase v2 versions); `SIGNED_OUT` handler defers logout via `setTimeout` to avoid deadlocks; 5s safety timeout for init
 - [x] Optional domain restriction via `config.js` `allowedDomains` array — sign-out forced if domain not allowed
 - [x] **User/admin roles** — every signed-in user must have a row in `chat_view_user_roles`; access denied (immediate sign-out) if no row exists
 - [x] **Auth bypass prevention** — `fetchOrCreateUserRole()` is called before the chat panel is shown; removed users can no longer access the app

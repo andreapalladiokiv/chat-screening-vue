@@ -330,18 +330,40 @@ async function loadFilterOptionsFromRPC() {
   if (effectiveProjectId && effectiveKey && window.supabase && window.supabase.createClient) {
     initSupabaseClient(effectiveProjectId, effectiveKey);
 
-    // Try to restore an existing auth session (covers page reloads and OAuth redirects).
-    // Supabase v2 getSession() automatically exchanges OAuth hash tokens if present.
-    try {
-      const { data: { session } } = await db.auth.getSession();
-      if (session && session.user) {
-        // Listen for auth events (token refresh, sign-out) throughout the session lifetime
-        setupAuthListener();
-        await afterAuthSuccess(session.user);
-        return;
-      }
-    } catch (err) {
-      console.warn('[auth] Failed to restore session:', err.message);
+    // Auth restoration: use onAuthStateChange as the primary mechanism.
+    // It reliably fires INITIAL_SESSION after the client finishes processing
+    // any OAuth hash tokens in the URL (more reliable than getSession() alone
+    // across different Supabase v2 minor versions).
+    let authResolved = false;
+    const authReady = new Promise((resolve) => {
+      const { data: { subscription } } = db.auth.onAuthStateChange((event, session) => {
+        console.log('[auth] State change:', event, !!session);
+        if (event === 'INITIAL_SESSION') {
+          resolve(session);
+        } else if (event === 'SIGNED_IN') {
+          // Fallback: some v2 versions fire SIGNED_IN instead of INITIAL_SESSION on OAuth redirect
+          if (!authResolved) resolve(session);
+        } else if (event === 'SIGNED_OUT') {
+          // Defer logout to avoid async Supabase calls inside onAuthStateChange
+          // (causes deadlocks per https://github.com/supabase/auth-js/issues/762)
+          if (authResolved && chatPanel.classList.contains('active')) {
+            setTimeout(() => handleLogout(), 0);
+          }
+          if (!authResolved) resolve(null);
+        }
+      });
+    });
+
+    // Wait for auth to initialize (with a 5s safety timeout)
+    const session = await Promise.race([
+      authReady,
+      new Promise(resolve => setTimeout(() => resolve(null), 5000))
+    ]);
+    authResolved = true;
+
+    if (session && session.user) {
+      await afterAuthSuccess(session.user);
+      return;
     }
   }
 
@@ -354,19 +376,6 @@ function initSupabaseClient(projectId, key) {
   db = window.supabase.createClient(url, key);
 }
 
-// Listen for token refresh and sign-out events after successful auth.
-// Called once after afterAuthSuccess succeeds (not during init, to avoid race conditions).
-function setupAuthListener() {
-  if (!db) return;
-  db.auth.onAuthStateChange((event, session) => {
-    console.log('[auth] State change:', event);
-    if (event === 'SIGNED_OUT') {
-      if (chatPanel.classList.contains('active')) {
-        handleLogout();
-      }
-    }
-  });
-}
 
 async function handleGoogleSignIn() {
   if (!window.supabase || !window.supabase.createClient) {

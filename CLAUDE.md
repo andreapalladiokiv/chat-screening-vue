@@ -92,7 +92,7 @@ When `environments` has 2+ entries, an **"Environment"** `<select>` dropdown app
 
 Credentials and the selected environment index are persisted in `localStorage` (`sb_project_id`, `sb_key`, `sb_selected_env`) after the first successful OAuth redirect, so subsequent visits restore the correct environment without re-reading `config.js`.
 
-**Persistent auth sessions**: On init, the app calls `getSession()` to restore stored sessions (Supabase v2 auto-exchanges OAuth hash tokens during this call). A `setupAuthListener()` callback monitors `SIGNED_OUT` events for automatic logout when tokens expire. This keeps users logged in across page reloads without re-prompting for Google sign-in.
+**Persistent auth sessions**: On init, the app registers `onAuthStateChange` and waits for the `INITIAL_SESSION` event (with a 5s safety timeout). This reliably handles both stored session restoration and OAuth redirect hash token exchange across Supabase v2 minor versions. The `SIGNED_OUT` handler defers `handleLogout()` via `setTimeout` to avoid the async-inside-onAuthStateChange deadlock ([auth-js#762](https://github.com/supabase/auth-js/issues/762)). No async Supabase calls are made inside the callback.
 
 ## Database Schema
 
