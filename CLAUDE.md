@@ -185,10 +185,16 @@ Messages in `chat_messages.message` must be a JSON object with a `type` field:
 // Human (customer) message
 { "type": "human", "content": "Hello, I need help..." }
 
-// AI agent message (final response, no tool calls)
+// AI agent message (final response, no tool calls) — wrapped format
 {
   "type": "ai",
   "content": "{\"output\": {\"text\": \"...\", \"request_category\": \"...\", \"request_type\": \"...\", \"identity_verified\": true, \"end_conversation\": false}}"
+}
+
+// AI agent message (final response, no tool calls) — flat format
+{
+  "type": "ai",
+  "content": "{\"text\": \"...\", \"request_category\": \"...\", \"request_type\": \"...\", \"identity_verified\": false, \"end_conversation\": false}"
 }
 
 // AI message with tool calls
@@ -205,12 +211,14 @@ Messages in `chat_messages.message` must be a JSON object with a `type` field:
 { "type": "system", "content": "..." }
 ```
 
-AI messages without `tool_calls` (or with an empty array) are treated as final responses. Their `content` is parsed as JSON and the `output` object is used to extract:
-- `output.text` — the response text displayed to the user
-- `output.request_category` — shown as a badge
-- `output.request_type` — shown as a badge
-- `output.identity_verified` — shown as a green "verified" badge
-- `output.end_conversation` — shown as a red "end" badge
+AI messages without `tool_calls` (or with an empty array) are treated as final responses. Their `content` is parsed as JSON and the following fields are extracted (supported both nested under `output` and at the top level):
+- `text` — the response text displayed to the user
+- `request_category` — shown as a badge
+- `request_type` — shown as a badge
+- `identity_verified` — shown as a green "verified" badge
+- `end_conversation` — shown as a red "end" badge
+
+The code checks `content.output` first (wrapped format), then falls back to `content` itself if it has a `text` property (flat format).
 
 ## Edge Functions
 
