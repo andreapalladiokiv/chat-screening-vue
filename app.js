@@ -1443,13 +1443,14 @@ function parseMessage(row) {
         }
       }
 
-      if (content && content.output) {
-        result.text = content.output.text || '';
+      const out = content?.output || (content?.text !== undefined ? content : null);
+      if (out) {
+        result.text = out.text || '';
         result.meta = {
-          identityVerified: content.output.identity_verified,
-          requestCategory: content.output.request_category,
-          requestType: content.output.request_type,
-          endConversation: content.output.end_conversation,
+          identityVerified: out.identity_verified,
+          requestCategory: out.request_category,
+          requestType: out.request_type,
+          endConversation: out.end_conversation,
         };
       } else {
         result.text = typeof content === 'string' ? content : JSON.stringify(content, null, 2);
@@ -1537,12 +1538,13 @@ function populateDetailSidebar(rows, sessionId) {
       if (msg.type === 'ai' && (!msg.tool_calls || msg.tool_calls.length === 0)) {
         let content = msg.content;
         if (typeof content === 'string') content = JSON.parse(content);
-        if (content && content.output) {
+        const out = content?.output || (content?.text !== undefined ? content : null);
+        if (out) {
           const badges = [];
-          if (content.output.request_category) badges.push(`<span class="badge">${escapeHtml(content.output.request_category)}</span>`);
-          if (content.output.request_type) badges.push(`<span class="badge">${escapeHtml(content.output.request_type)}</span>`);
-          if (content.output.identity_verified) badges.push('<span class="badge verified">verified</span>');
-          if (content.output.end_conversation) badges.push('<span class="badge end-conv">end</span>');
+          if (out.request_category) badges.push(`<span class="badge">${escapeHtml(out.request_category)}</span>`);
+          if (out.request_type) badges.push(`<span class="badge">${escapeHtml(out.request_type)}</span>`);
+          if (out.identity_verified) badges.push('<span class="badge verified">verified</span>');
+          if (out.end_conversation) badges.push('<span class="badge end-conv">end</span>');
           classification = badges.join('');
           break;
         }
