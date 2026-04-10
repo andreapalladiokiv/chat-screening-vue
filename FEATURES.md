@@ -14,11 +14,11 @@ Update this file whenever a feature is added, changed, or completed.
 - [x] Per-environment `allowedDomains` — each environment can restrict sign-in to different email domains
 - [x] Credentials and selected environment index persisted in `localStorage` (`sb_project_id`, `sb_key`, `sb_selected_env`) across page reloads and OAuth redirects
 - [x] Environment dropdown selection restored on page reload and after OAuth redirect
-- [x] **Persistent auth sessions** — `onAuthStateChange` listener keeps users logged in across page reloads, handles OAuth redirect callbacks, token refreshes, and session expiry (auto-logout on `SIGNED_OUT`)
+- [x] **Persistent auth sessions** — `onAuthStateChange` with `INITIAL_SESSION` event restores sessions on init (handles OAuth hash token exchange reliably across Supabase v2 versions); `SIGNED_OUT` handler defers logout via `setTimeout` to avoid deadlocks; 5s safety timeout for init
 - [x] Optional domain restriction via `config.js` `allowedDomains` array — sign-out forced if domain not allowed
 - [x] **User/admin roles** — every signed-in user must have a row in `chat_view_user_roles`; access denied (immediate sign-out) if no row exists
 - [x] **Auth bypass prevention** — `fetchOrCreateUserRole()` is called before the chat panel is shown; removed users can no longer access the app
-- [x] **Connection test with retry** — up to 3 attempts (2s delay between retries), 10-second timeout per attempt; Supabase error objects normalized to proper `Error` instances (prevents `[object Object]` display)
+- [x] **Connection test with retry** — uses `select('id').limit(1)` (not `count('exact')`) to avoid full table scans; up to 3 attempts (2s delay between retries), 10-second timeout per attempt; Supabase error objects normalized to proper `Error` instances (prevents `[object Object]` display)
 - [x] Clear error messages for failed connections (timeout, bad credentials, RLS, domain restriction)
 - [x] Logout button clears auth session, selected environment, and returns to login screen
 - [x] Login card shows the Google sign-in button, an error area, and the optional environment selector (no credential fields, no status log)
@@ -140,7 +140,7 @@ Update this file whenever a feature is added, changed, or completed.
 - [x] "Searching..." indicator in session list during server-side search
 - [x] **Empty states** — "No sessions found" or "No sessions match your filters" with Clear Filters action link
 - [x] **Copy session ID** — hover over session ID in session list to reveal copy button; click copies to clipboard with visual feedback (✓)
-- [x] **Shareable session deep links** — `?session=<id>` URL param; auto-selects session on page load and refresh via `autoSelectSessionFromURL()`; fetches session via RPC if not in loaded list; `?session=` param preserved through OAuth redirects; updated via `history.replaceState`
+- [x] **Shareable session deep links** — `?session=<id>&env=<index>` URL params; auto-selects session on page load and refresh via `autoSelectSessionFromURL()`; `?env=` restores environment from URL; fetches session via RPC if not in loaded list; both params preserved through OAuth redirects; updated via `history.replaceState`
 - [x] **Session ID overflow** — long session IDs truncated with ellipsis in sidebar
 - [x] Global JS error handler shows errors in the browser console
 - [x] CDN load error handler for Supabase library (error shown in `#login-error`)
