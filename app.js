@@ -83,8 +83,6 @@ const liveBadge = document.getElementById('live-badge');
 const envSelect = document.getElementById('env-select');
 const envSelectorWrap = document.getElementById('env-selector-wrap');
 const loadingOverlay = document.getElementById('loading-overlay');
-const loadProgressBar = document.getElementById('load-progress-bar');
-const loadProgressText = document.getElementById('load-progress-text');
 const adminModalOverlay = document.getElementById('admin-modal-overlay');
 const adminModalClose = document.getElementById('admin-modal-close');
 const adminInfoName = document.getElementById('admin-info-name');
@@ -1218,18 +1216,6 @@ function buildDropdown(panel, trigger, items, defaultLabel, activePrefix) {
   updateDropdownLabel(panel, trigger, defaultLabel, activePrefix);
 }
 
-function updateLoadProgress(loaded, total) {
-  if (!loadProgressBar || !loadProgressText) return;
-  const pct = total > 0 ? Math.round((loaded / total) * 100) : 0;
-  loadProgressBar.style.width = pct + '%';
-  if (total === 0) {
-    loadProgressText.textContent = 'Loading sessions…';
-  } else if (loaded < total) {
-    loadProgressText.textContent = `${loaded.toLocaleString()} of ${total.toLocaleString()} rows (${pct}%)`;
-  } else {
-    loadProgressText.textContent = `${total.toLocaleString()} rows loaded`;
-  }
-}
 
 async function clearFilters() {
   filterDateFrom.value = '';
