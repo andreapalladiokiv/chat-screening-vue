@@ -92,6 +92,8 @@ When `environments` has 2+ entries, an **"Environment"** `<select>` dropdown app
 
 Credentials and the selected environment index are persisted in `localStorage` (`sb_project_id`, `sb_key`, `sb_selected_env`) after the first successful OAuth redirect, so subsequent visits restore the correct environment without re-reading `config.js`.
 
+**Persistent auth sessions**: The app uses `onAuthStateChange` to listen for Supabase auth events (`INITIAL_SESSION`, `SIGNED_IN`, `TOKEN_REFRESHED`, `SIGNED_OUT`). This keeps users logged in across page reloads and handles OAuth redirect callbacks, token refreshes, and session expiry gracefully. A fast-path `getSession()` call is still made on init for immediate restoration of stored sessions.
+
 ## Database Schema
 
 The app reads from a `chat_messages` table (not created in this repo — it must pre-exist) and writes feedback to a `chat_feedback` table.
@@ -278,7 +280,7 @@ The Edge Function:
 - **XSS prevention** — all user-supplied or database-sourced text is passed through `escapeHtml()` before setting `innerHTML`. Never set `innerHTML` with raw data.
 - **Lazy loading** — Session list uses RPC `get_session_list` (two-stage architecture: fast GROUP BY for candidate IDs, then JSONB metadata extraction for those sessions only). Default load: 50 most recent sessions. Infinite scroll loads 10 more per batch. Filters are applied server-side via "Apply Filters" button with a max 3-day date range. Filter options (tools, categories, request types) are fetched once at login via `get_filter_options` RPC (AI metadata scoped to last 3 days; visitor options queried directly from `visitors_settings` without date scoping). Retries once on timeout with 3s delay.
 - **Server-side search** — Session ID search queries the entire `chat_messages` table via `p_session_id` ILIKE parameter on `get_session_list`. Debounced at 400ms with a "Searching..." indicator
-- **Shareable URLs** — selecting a session updates the URL with `?session=<id>` via `history.replaceState`; on load, auto-selects the session if present in the URL
+- **Shareable URLs / deep links** — selecting a session updates the URL with `?session=<id>` via `history.replaceState`; on page load or refresh, `autoSelectSessionFromURL()` checks the URL parameter and auto-selects the session. If the session isn't in the loaded list, it is fetched specifically via `get_session_list` with `p_session_id` and prepended. The `?session=` query param is preserved through OAuth redirects so deep links work even when the user isn't logged in yet.
 - **Keyboard shortcuts** — `J`/`K` navigate sessions, `E` expand/collapse tools, `R` toggle reviewed, `F` open feedback, `/` focus search, `Escape` close modals, `Ctrl+Shift+F` focus in-session search; session items are tabbable (`tabIndex=0`)
 - **Copy** — hover over a session ID in the session list or any message bubble to reveal a copy button; click copies to clipboard with visual feedback
 - **Empty states** — session list shows "No sessions found" or "No sessions match your filters" with a Clear Filters link
@@ -287,7 +289,7 @@ The Edge Function:
 - **In-session search** — search bar in the detail sidebar; debounced regex text matching with `<mark>` highlights, prev/next navigation, match counter
 - **Enhanced system messages** — parsed JSON rendered as structured grid cards (label-value rows) instead of single-line text
 - **Tool/system message dimensions** — tool and system bubbles have fixed 80% width; max-height 500px with scroll
-- **Error handling** — connection errors shown in `#login-error`; message errors logged to console
+- **Error handling** — connection test retries up to 3 times (2s between attempts) before showing an error; Supabase error objects are normalized to proper `Error` instances with meaningful messages (prevents `[object Object]` display); errors shown in `#login-error`; message errors logged to console
 - **Status log** — `logStatus()` is a no-op that writes to `console.log` only; the visible status log was removed from the login UI
 - **Environment switcher** — dropdown in the top nav bar (near Live badge) allows switching environments without logging out; triggers sign-out, re-auth with the new project's OAuth
 - **Time gate** — shows the time range (last-activity based) of currently loaded sessions in the session info bar

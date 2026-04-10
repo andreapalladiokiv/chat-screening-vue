@@ -312,15 +312,35 @@ async function loadFilterOptionsFromRPC() {
 
   if (projectId && key && window.supabase && window.supabase.createClient) {
     initSupabaseClient(projectId, key);
+
+    // Listen for auth state changes — handles OAuth redirect callback,
+    // token refresh, and sign-out events throughout the session lifetime.
+    let authHandled = false;
+    db.auth.onAuthStateChange(async (event, session) => {
+      console.log('[auth] State change:', event);
+      if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') && session?.user) {
+        if (authHandled) return; // avoid duplicate calls
+        authHandled = true;
+        await afterAuthSuccess(session.user);
+      } else if (event === 'SIGNED_OUT') {
+        // Token expired and could not be refreshed — clean up
+        if (chatPanel.classList.contains('active')) {
+          handleLogout();
+        }
+      }
+    });
+
+    // Fast-path: check for an already-stored session synchronously.
+    // If found, afterAuthSuccess will be called via the onAuthStateChange INITIAL_SESSION event above.
     try {
       const { data: { session } } = await db.auth.getSession();
       if (session && session.user) {
-        await afterAuthSuccess(session.user);
+        // The onAuthStateChange INITIAL_SESSION handler will pick this up
         return;
       }
     } catch (err) {
       console.warn('[auth] Failed to restore session:', err.message);
-      // Fall through to show login panel
+      // Fall through to show login panel; onAuthStateChange may still fire
     }
   }
 
@@ -366,7 +386,7 @@ async function handleGoogleSignIn() {
 
   const { error } = await db.auth.signInWithOAuth({
     provider: 'google',
-    options: { redirectTo: window.location.origin + window.location.pathname },
+    options: { redirectTo: window.location.origin + window.location.pathname + window.location.search },
   });
 
   if (error) {
@@ -409,18 +429,39 @@ async function afterAuthSuccess(user) {
   connectBtn.textContent = 'Loading...';
 
   try {
-    const testPromise = db
-      .from('chat_messages')
-      .select('id', { count: 'exact', head: true });
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Connection timed out after 10s. Check your Project ID.')), 10000)
-    );
-    const { count, error } = await Promise.race([testPromise, timeoutPromise]);
+    // Connection test with retry (up to 3 attempts, 2s between retries)
+    const MAX_RETRIES = 3;
+    let lastError = null;
+    let count = null;
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const testPromise = db
+          .from('chat_messages')
+          .select('id', { count: 'exact', head: true });
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Connection timed out after 10s. Check your Project ID.')), 10000)
+        );
+        const result = await Promise.race([testPromise, timeoutPromise]);
 
-    if (error) {
-      logStatus('ERROR from Supabase: ' + JSON.stringify(error));
-      throw error;
+        if (result.error) {
+          const errMsg = result.error.message || result.error.details || JSON.stringify(result.error);
+          logStatus('ERROR from Supabase (attempt ' + attempt + '/' + MAX_RETRIES + '): ' + errMsg);
+          lastError = new Error(errMsg);
+        } else {
+          count = result.count;
+          lastError = null;
+          break; // success
+        }
+      } catch (retryErr) {
+        lastError = retryErr instanceof Error ? retryErr : new Error(retryErr.message || JSON.stringify(retryErr));
+        logStatus('Connection attempt ' + attempt + '/' + MAX_RETRIES + ' failed: ' + lastError.message);
+      }
+      if (attempt < MAX_RETRIES) {
+        logStatus('Retrying in 2s...');
+        await new Promise(r => setTimeout(r, 2000));
+      }
     }
+    if (lastError) throw lastError;
     logStatus('Connection OK. Row count: ' + (count !== null ? count : 'unknown (RLS may hide count)'));
 
     const authorized = await fetchOrCreateUserRole();
@@ -462,9 +503,12 @@ async function afterAuthSuccess(user) {
     renderSessionList();
     updateTimeGate();
     subscribeRealtime();
+
+    // Auto-select session from URL ?session=<id> (shareable deep links)
+    await autoSelectSessionFromURL();
   } catch (err) {
-    logStatus('FAILED: ' + (err.message || String(err)));
-    const msg = err.message || String(err);
+    const msg = err instanceof Error ? err.message : (err.message || err.details || JSON.stringify(err));
+    logStatus('FAILED: ' + msg);
     const hint = msg.includes('timed out') ? ' The server may be slow — try again.' : '';
     showLoginError('Connection failed: ' + msg + hint);
     db = null;
@@ -542,11 +586,7 @@ async function handleRefresh() {
       populateFilters();
       renderSessionList();
       updateTimeGate();
-      // Auto-select session from URL ?session=<id> (shareable links)
-      const urlSession = new URL(window.location).searchParams.get('session');
-      if (urlSession && sessionMap.has(urlSession)) {
-        selectSession(urlSession);
-      }
+      await autoSelectSessionFromURL();
     } else {
       sessionCount.textContent = 'No sessions found.';
     }
@@ -554,6 +594,38 @@ async function handleRefresh() {
   refreshBtn.disabled = false;
   refreshBtn.textContent = 'Refresh';
   subscribeRealtime();
+}
+
+// ── Auto-select session from URL ──
+
+async function autoSelectSessionFromURL() {
+  const urlSession = new URL(window.location).searchParams.get('session');
+  if (!urlSession) return;
+
+  // Session is already in the loaded list — select it directly
+  if (sessionMap.has(urlSession)) {
+    selectSession(urlSession);
+    return;
+  }
+
+  // Session not in loaded list — fetch it specifically via RPC
+  try {
+    const { data, error } = await db.rpc('get_session_list', { p_session_id: urlSession, p_limit: 1 });
+    if (error || !data) {
+      console.warn('[url] Failed to fetch linked session:', error);
+      return;
+    }
+    const fetched = parseSessionResults(data);
+    if (fetched.length > 0) {
+      // Prepend to session list so it appears at the top
+      allSessions.unshift(fetched[0]);
+      sessionMap.set(fetched[0].id, fetched[0]);
+      renderSessionList();
+      selectSession(urlSession);
+    }
+  } catch (err) {
+    console.warn('[url] Error fetching linked session:', err.message);
+  }
 }
 
 // ── Realtime ──
@@ -2230,7 +2302,7 @@ async function handleEnvSwitch() {
 
   const { error } = await db.auth.signInWithOAuth({
     provider: 'google',
-    options: { redirectTo: window.location.origin + window.location.pathname },
+    options: { redirectTo: window.location.origin + window.location.pathname + window.location.search },
   });
 
   if (error) {
