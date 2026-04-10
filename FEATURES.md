@@ -18,7 +18,7 @@ Update this file whenever a feature is added, changed, or completed.
 - [x] Optional domain restriction via `config.js` `allowedDomains` array — sign-out forced if domain not allowed
 - [x] **User/admin roles** — every signed-in user must have a row in `chat_view_user_roles`; access denied (immediate sign-out) if no row exists
 - [x] **Auth bypass prevention** — `fetchOrCreateUserRole()` is called before the chat panel is shown; removed users can no longer access the app
-- [x] Connection test with 10-second timeout before switching to chat view
+- [x] **Connection test with retry** — up to 3 attempts (2s delay between retries), 10-second timeout per attempt; Supabase error objects normalized to proper `Error` instances (prevents `[object Object]` display)
 - [x] Clear error messages for failed connections (timeout, bad credentials, RLS, domain restriction)
 - [x] Logout button clears auth session, selected environment, and returns to login screen
 - [x] Login card shows the Google sign-in button, an error area, and the optional environment selector (no credential fields, no status log)

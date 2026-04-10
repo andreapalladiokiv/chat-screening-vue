@@ -289,7 +289,7 @@ The Edge Function:
 - **In-session search** — search bar in the detail sidebar; debounced regex text matching with `<mark>` highlights, prev/next navigation, match counter
 - **Enhanced system messages** — parsed JSON rendered as structured grid cards (label-value rows) instead of single-line text
 - **Tool/system message dimensions** — tool and system bubbles have fixed 80% width; max-height 500px with scroll
-- **Error handling** — connection errors shown in `#login-error`; message errors logged to console
+- **Error handling** — connection test retries up to 3 times (2s between attempts) before showing an error; Supabase error objects are normalized to proper `Error` instances with meaningful messages (prevents `[object Object]` display); errors shown in `#login-error`; message errors logged to console
 - **Status log** — `logStatus()` is a no-op that writes to `console.log` only; the visible status log was removed from the login UI
 - **Environment switcher** — dropdown in the top nav bar (near Live badge) allows switching environments without logging out; triggers sign-out, re-auth with the new project's OAuth
 - **Time gate** — shows the time range (last-activity based) of currently loaded sessions in the session info bar

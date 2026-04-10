@@ -429,18 +429,39 @@ async function afterAuthSuccess(user) {
   connectBtn.textContent = 'Loading...';
 
   try {
-    const testPromise = db
-      .from('chat_messages')
-      .select('id', { count: 'exact', head: true });
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Connection timed out after 10s. Check your Project ID.')), 10000)
-    );
-    const { count, error } = await Promise.race([testPromise, timeoutPromise]);
+    // Connection test with retry (up to 3 attempts, 2s between retries)
+    const MAX_RETRIES = 3;
+    let lastError = null;
+    let count = null;
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const testPromise = db
+          .from('chat_messages')
+          .select('id', { count: 'exact', head: true });
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Connection timed out after 10s. Check your Project ID.')), 10000)
+        );
+        const result = await Promise.race([testPromise, timeoutPromise]);
 
-    if (error) {
-      logStatus('ERROR from Supabase: ' + JSON.stringify(error));
-      throw error;
+        if (result.error) {
+          const errMsg = result.error.message || result.error.details || JSON.stringify(result.error);
+          logStatus('ERROR from Supabase (attempt ' + attempt + '/' + MAX_RETRIES + '): ' + errMsg);
+          lastError = new Error(errMsg);
+        } else {
+          count = result.count;
+          lastError = null;
+          break; // success
+        }
+      } catch (retryErr) {
+        lastError = retryErr instanceof Error ? retryErr : new Error(retryErr.message || JSON.stringify(retryErr));
+        logStatus('Connection attempt ' + attempt + '/' + MAX_RETRIES + ' failed: ' + lastError.message);
+      }
+      if (attempt < MAX_RETRIES) {
+        logStatus('Retrying in 2s...');
+        await new Promise(r => setTimeout(r, 2000));
+      }
     }
+    if (lastError) throw lastError;
     logStatus('Connection OK. Row count: ' + (count !== null ? count : 'unknown (RLS may hide count)'));
 
     const authorized = await fetchOrCreateUserRole();
@@ -486,8 +507,8 @@ async function afterAuthSuccess(user) {
     // Auto-select session from URL ?session=<id> (shareable deep links)
     await autoSelectSessionFromURL();
   } catch (err) {
-    logStatus('FAILED: ' + (err.message || String(err)));
-    const msg = err.message || String(err);
+    const msg = err instanceof Error ? err.message : (err.message || err.details || JSON.stringify(err));
+    logStatus('FAILED: ' + msg);
     const hint = msg.includes('timed out') ? ' The server may be slow — try again.' : '';
     showLoginError('Connection failed: ' + msg + hint);
     db = null;
