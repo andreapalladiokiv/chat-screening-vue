@@ -310,37 +310,38 @@ async function loadFilterOptionsFromRPC() {
     envSelect.value = savedEnvIdx;
   }
 
-  if (projectId && key && window.supabase && window.supabase.createClient) {
-    initSupabaseClient(projectId, key);
+  // ── Restore environment from URL ?env= parameter (deep link support) ──
+  const urlEnvIdx = new URL(window.location).searchParams.get('env');
+  if (urlEnvIdx !== null && !isNaN(parseInt(urlEnvIdx, 10))) {
+    const idx = parseInt(urlEnvIdx, 10);
+    if (idx >= 0 && idx < environments.length) {
+      const env = environments[idx];
+      localStorage.setItem('sb_selected_env', idx);
+      localStorage.setItem('sb_project_id', env.projectId);
+      localStorage.setItem('sb_key', env.anonKey);
+      if (envSelect) envSelect.value = idx;
+    }
+  }
 
-    // Listen for auth state changes — handles OAuth redirect callback,
-    // token refresh, and sign-out events throughout the session lifetime.
-    let authHandled = false;
-    db.auth.onAuthStateChange(async (event, session) => {
-      console.log('[auth] State change:', event);
-      if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') && session?.user) {
-        if (authHandled) return; // avoid duplicate calls
-        authHandled = true;
-        await afterAuthSuccess(session.user);
-      } else if (event === 'SIGNED_OUT') {
-        // Token expired and could not be refreshed — clean up
-        if (chatPanel.classList.contains('active')) {
-          handleLogout();
-        }
-      }
-    });
+  // Re-read from localStorage (may have been updated by URL env param above)
+  const effectiveProjectId = localStorage.getItem('sb_project_id') || projectId;
+  const effectiveKey = localStorage.getItem('sb_key') || key;
 
-    // Fast-path: check for an already-stored session synchronously.
-    // If found, afterAuthSuccess will be called via the onAuthStateChange INITIAL_SESSION event above.
+  if (effectiveProjectId && effectiveKey && window.supabase && window.supabase.createClient) {
+    initSupabaseClient(effectiveProjectId, effectiveKey);
+
+    // Try to restore an existing auth session (covers page reloads and OAuth redirects).
+    // Supabase v2 getSession() automatically exchanges OAuth hash tokens if present.
     try {
       const { data: { session } } = await db.auth.getSession();
       if (session && session.user) {
-        // The onAuthStateChange INITIAL_SESSION handler will pick this up
+        // Listen for auth events (token refresh, sign-out) throughout the session lifetime
+        setupAuthListener();
+        await afterAuthSuccess(session.user);
         return;
       }
     } catch (err) {
       console.warn('[auth] Failed to restore session:', err.message);
-      // Fall through to show login panel; onAuthStateChange may still fire
     }
   }
 
@@ -351,6 +352,20 @@ async function loadFilterOptionsFromRPC() {
 function initSupabaseClient(projectId, key) {
   const url = 'https://' + projectId + '.supabase.co';
   db = window.supabase.createClient(url, key);
+}
+
+// Listen for token refresh and sign-out events after successful auth.
+// Called once after afterAuthSuccess succeeds (not during init, to avoid race conditions).
+function setupAuthListener() {
+  if (!db) return;
+  db.auth.onAuthStateChange((event, session) => {
+    console.log('[auth] State change:', event);
+    if (event === 'SIGNED_OUT') {
+      if (chatPanel.classList.contains('active')) {
+        handleLogout();
+      }
+    }
+  });
 }
 
 async function handleGoogleSignIn() {
@@ -429,15 +444,16 @@ async function afterAuthSuccess(user) {
   connectBtn.textContent = 'Loading...';
 
   try {
-    // Connection test with retry (up to 3 attempts, 2s between retries)
+    // Connection test with retry (up to 3 attempts, 2s between retries).
+    // Uses select().limit(1) instead of count('exact') to avoid full table scans.
     const MAX_RETRIES = 3;
     let lastError = null;
-    let count = null;
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {
         const testPromise = db
           .from('chat_messages')
-          .select('id', { count: 'exact', head: true });
+          .select('id')
+          .limit(1);
         const timeoutPromise = new Promise((_, reject) =>
           setTimeout(() => reject(new Error('Connection timed out after 10s. Check your Project ID.')), 10000)
         );
@@ -448,7 +464,6 @@ async function afterAuthSuccess(user) {
           logStatus('ERROR from Supabase (attempt ' + attempt + '/' + MAX_RETRIES + '): ' + errMsg);
           lastError = new Error(errMsg);
         } else {
-          count = result.count;
           lastError = null;
           break; // success
         }
@@ -462,7 +477,7 @@ async function afterAuthSuccess(user) {
       }
     }
     if (lastError) throw lastError;
-    logStatus('Connection OK. Row count: ' + (count !== null ? count : 'unknown (RLS may hide count)'));
+    logStatus('Connection OK.');
 
     const authorized = await fetchOrCreateUserRole();
     if (!authorized) return;
@@ -1428,6 +1443,11 @@ async function selectSession(sessionId) {
   // Update URL for sharing (without triggering navigation)
   const url = new URL(window.location);
   url.searchParams.set('session', sessionId);
+  // Include environment index so deep links work across multi-env setups
+  const envIdx = localStorage.getItem('sb_selected_env') || '0';
+  if (environments.length > 1) {
+    url.searchParams.set('env', envIdx);
+  }
   history.replaceState(null, '', url);
 
   // Targeted active highlight toggle (instead of full renderSessionList)
