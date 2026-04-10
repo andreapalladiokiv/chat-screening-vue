@@ -954,7 +954,18 @@ async function loadDefaultSessions() {
   const MAX_RETRIES = 2;
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      const { data, error } = await db.rpc('get_session_list', { p_limit: 50 });
+      // Default load scopes to last 3 days to avoid full-table GROUP BY on large databases.
+      const now = new Date();
+      const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
+      const rpcPromise = db.rpc('get_session_list', {
+        p_limit: 50,
+        p_date_from: threeDaysAgo.toISOString(),
+        p_date_to: now.toISOString(),
+      });
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Session loading timed out. The database may be under heavy load — try again.')), 15000)
+      );
+      const { data, error } = await Promise.race([rpcPromise, timeoutPromise]);
       if (error) {
         const errMsg = error.message || error.details || JSON.stringify(error);
         logStatus('Session fetch ERROR (attempt ' + attempt + '/' + MAX_RETRIES + '): ' + errMsg);
