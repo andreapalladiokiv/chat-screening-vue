@@ -13,7 +13,7 @@ The application is a zero-build-step frontend: open `index.html` in a browser an
 ```
 chat-view/
 ├── index.html                              # Single-page app (HTML + all CSS)
-├── app.js                                  # All application logic (~1700 lines)
+├── app.js                                  # All application logic (~2600 lines)
 ├── config.js                               # Gitignored — Supabase credentials, multi-env config, filter options + optional domain restriction
 ├── favicon.svg                             # Eyes emoji favicon
 ├── CLAUDE.md                               # AI assistant context (this file)
@@ -278,9 +278,9 @@ The Edge Function:
 - **Module pattern** — IIFE `init()` runs on load; no ES modules
 - **Global state** — `db`, `allSessions`, `allToolNames`, `allCategories`, `allRequestTypes`, `currentSessionId`, `feedbackMeta`, `reviewedSessions`, `environments`, `currentUserRole`, `sessionCursor`, `isLoadingMore`, `noMoreSessions`, `filtersApplied`, `currentFilterParams`, `searchResults`, `searchDebounceTimer` are top-level variables
 - **XSS prevention** — all user-supplied or database-sourced text is passed through `escapeHtml()` before setting `innerHTML`. Never set `innerHTML` with raw data.
-- **Lazy loading** — Session list uses RPC `get_session_list` (two-stage architecture: fast GROUP BY for candidate IDs, then JSONB metadata extraction for those sessions only). Default load: 50 most recent sessions. Infinite scroll loads 10 more per batch. Filters are applied server-side via "Apply Filters" button with a max 3-day date range. Filter options (tools, categories, request types) are fetched once at login via `get_filter_options` RPC (AI metadata scoped to last 3 days; visitor options queried directly from `visitors_settings` without date scoping). Retries once on timeout with 3s delay.
+- **Lazy loading** — Session list uses RPC `get_session_list` (two-stage architecture: fast GROUP BY for candidate IDs, then JSONB metadata extraction for those sessions only). Default load: 50 most recent sessions scoped to the last 3 days (avoids full-table GROUP BY on large databases) with a 15s timeout. Session loading retries up to 2 attempts with 2s delay between retries. Infinite scroll loads 10 more per batch. Filters are applied server-side via "Apply Filters" button with a max 3-day date range. Filter options (tools, categories, request types) are fetched once at login via `get_filter_options` RPC (AI metadata scoped to last 3 days; visitor options queried directly from `visitors_settings` without date scoping).
 - **Server-side search** — Session ID search queries the entire `chat_messages` table via `p_session_id` ILIKE parameter on `get_session_list`. Debounced at 400ms with a "Searching..." indicator
-- **Shareable URLs / deep links** — selecting a session updates the URL with `?session=<id>&env=<index>` via `history.replaceState`; on page load or refresh, `autoSelectSessionFromURL()` checks the URL parameter and auto-selects the session. If the session isn't in the loaded list, it is fetched specifically via `get_session_list` with `p_session_id` and prepended. The `?env=` parameter restores the correct environment from the URL on init (before auth). Both query params are preserved through OAuth redirects so deep links work even when the user isn't logged in yet.
+- **Shareable URLs / deep links** — selecting a session updates the URL with `?session=<id>&env=<index>` via `history.replaceState`; on page load or refresh, `autoSelectSessionFromURL()` checks the URL parameter and auto-selects the session. If the session isn't in the loaded list (e.g. older than 3 days), it is fetched directly via `chat_messages` table with an exact `.eq('session_id')` match (index-backed, works for any age) and enriched with `visitors_settings` data. The session metadata (tools, categories, type counts, etc.) is built client-side via `buildSessionFromMessages()`. The `?env=` parameter restores the correct environment from the URL on init (before auth). Both query params are preserved through OAuth redirects so deep links work even when the user isn't logged in yet.
 - **Keyboard shortcuts** — `J`/`K` navigate sessions, `E` expand/collapse tools, `R` toggle reviewed, `F` open feedback, `/` focus search, `Escape` close modals, `Ctrl+Shift+F` focus in-session search; session items are tabbable (`tabIndex=0`)
 - **Copy** — hover over a session ID in the session list or any message bubble to reveal a copy button; click copies to clipboard with visual feedback
 - **Empty states** — session list shows "No sessions found" or "No sessions match your filters" with a Clear Filters link
@@ -289,7 +289,7 @@ The Edge Function:
 - **In-session search** — search bar in the detail sidebar; debounced regex text matching with `<mark>` highlights, prev/next navigation, match counter
 - **Enhanced system messages** — parsed JSON rendered as structured grid cards (label-value rows) instead of single-line text
 - **Tool/system message dimensions** — tool and system bubbles have fixed 80% width; max-height 500px with scroll
-- **Error handling** — connection test uses `select('id').limit(1)` (not `count('exact')`) to avoid full table scans; retries up to 3 times (2s between attempts) before showing an error; Supabase error objects are normalized to proper `Error` instances with meaningful messages (prevents `[object Object]` display); errors shown in `#login-error`; message errors logged to console
+- **Error handling** — connection test uses `select('id').limit(1)` (not `count('exact')`) to avoid full table scans; retries up to 3 times (2s between attempts) with 10s timeout per attempt before showing an error; Supabase error objects are normalized to proper `Error` instances with meaningful messages (prevents `[object Object]` display); errors shown in `#login-error`; message errors logged to console
 - **Status log** — `logStatus()` is a no-op that writes to `console.log` only; the visible status log was removed from the login UI
 - **Environment switcher** — dropdown in the top nav bar (near Live badge) allows switching environments without logging out; triggers sign-out, re-auth with the new project's OAuth
 - **Time gate** — shows the time range (last-activity based) of currently loaded sessions in the session info bar
@@ -317,7 +317,7 @@ The Edge Function:
       - `#chat-header-bar` — permanent header with `#chat-session-controls` (shows session/conversation ID when selected)
       - `#chat-main` — scrollable message area; wiped and repopulated on session switch
     - `#detail-sidebar` — right panel (320px), shown when a session is selected; contains session controls (reviewed/feedback/expand-collapse), in-session search, quick-jump buttons, duration, message pills, classification, tools, and visitor info
-- `app.js` is loaded with a cache-busting query param (`?v=54`) — increment this when deploying changes
+- `app.js` is loaded with a cache-busting query param (`?v=64`) — increment this when deploying changes
 - Login panel contains only the environment selector (if multi-env), "Sign in with Google" button, and `#login-error`; no credential input fields, no status log
 
 ## Filtering Logic
@@ -357,7 +357,7 @@ Reviewed state is managed client-side (no database writes):
 
 1. **Edge function slug**: The file is `supabase/functions/chat-feedback/` and the frontend calls `db.functions.invoke('chat-feedback', ...)`. The deployed Supabase slug must match — if you redeploy under a different name, update the `invoke` call in `submitFeedback()` (`app.js`) accordingly.
 
-2. **Cache-busting**: `app.js` is loaded as `app.js?v=53`. Increment the version number when deploying updated `app.js` to avoid browsers serving stale cached versions. Forgetting this has caused runtime errors when HTML and JS are out of sync (e.g. removing a DOM element that old JS still references).
+2. **Cache-busting**: `app.js` is loaded as `app.js?v=64`. Increment the version number when deploying updated `app.js` to avoid browsers serving stale cached versions. Forgetting this has caused runtime errors when HTML and JS are out of sync (e.g. removing a DOM element that old JS still references).
 
 3. **config.js is required**: The login UI has no manual credential input fields. If `config.js` is absent and no credentials are saved in `localStorage`, the Google sign-in button will display an error. Always deploy `config.js` alongside `index.html`. Use the multi-env `environments` array format to expose a named dropdown for multiple Supabase projects.
 
