@@ -19,6 +19,7 @@ let noMoreSessions = false;  // true when server returned fewer than requested
 let filtersApplied = false;  // true when server-side filters are active
 let currentFilterParams = null; // stored RPC params when filters are applied (for loadMore)
 let searchResults = null;       // non-null when server-side session_id search is active
+let searchError = null;         // error message shown in session list when a search fails or times out
 let searchDebounceTimer = null; // debounce timer for search input
 let renderDebounceTimer = null; // debounce timer for client-side filter changes
 
@@ -563,6 +564,7 @@ async function handleLogout() {
   filtersApplied = false;
   currentFilterParams = null;
   searchResults = null;
+  searchError = null;
   clearTimeout(searchDebounceTimer);
   sessionSearch.value = '';
   if (envSwitcher) { envSwitcher.classList.remove('active'); envSwitcher.innerHTML = ''; }
@@ -1134,13 +1136,24 @@ function handleSessionListScroll() {
   }
 }
 
-// Server-side session_id search with debounce
+// Server-side session_id search with debounce.
+//
+// Two-tier strategy:
+//   1. Exact match (fast, index-backed) — handles the common case of pasting a
+//      full session_id or conversation_id. Avoids the slow ILIKE full-table
+//      scan that times out on large databases.
+//   2. RPC ILIKE fallback — only runs when the exact lookup returns nothing,
+//      preserving substring search for partial IDs.
+//
+// On RPC error / timeout we expose a visible message in the session list
+// instead of silently rendering "no sessions found".
 function handleSessionSearch() {
   clearTimeout(searchDebounceTimer);
   const query = sessionSearch.value.trim();
   if (!query) {
     // Cleared — restore normal view
     searchResults = null;
+    searchError = null;
     renderSessionList();
     updateTimeGate();
     return;
@@ -1148,32 +1161,186 @@ function handleSessionSearch() {
   // Show searching indicator immediately
   sessionList.innerHTML = '<li class="scroll-loader">Searching...</li>';
   sessionCount.textContent = 'Searching...';
+  searchError = null;
 
   // Debounce: wait 400ms after last keystroke before hitting the server
   searchDebounceTimer = setTimeout(async () => {
     if (!db) return;
+    const startQuery = query;
+    // Helper: bail out if the user kept typing while we were waiting
+    const stillCurrent = () => sessionSearch.value.trim() === startQuery;
+
     try {
-      const { data, error } = await db.rpc('get_session_list', {
+      // ── Tier 1: exact-match fast path ────────────────────────────────────
+      const exactSession = await tryExactSessionLookup(startQuery);
+      if (!stillCurrent()) return;
+      if (exactSession) {
+        searchResults = [exactSession];
+        searchError = null;
+        renderSessionList();
+        updateTimeGate();
+        return;
+      }
+
+      // ── Tier 2: RPC substring fallback (with timeout) ────────────────────
+      const SEARCH_TIMEOUT_MS = 10000;
+      const rpcPromise = db.rpc('get_session_list', {
         p_limit: 50,
-        p_session_id: query,
+        p_session_id: startQuery,
       });
-      // If the search box was cleared while the RPC was in flight, ignore results
-      if (!sessionSearch.value.trim()) { searchResults = null; renderSessionList(); return; }
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Search timed out — try a more specific ID.')), SEARCH_TIMEOUT_MS)
+      );
+      const { data, error } = await Promise.race([rpcPromise, timeoutPromise]);
+      if (!stillCurrent()) return;
       if (error) {
         console.warn('[search] RPC error:', error);
         searchResults = null;
+        searchError = error.message || 'Search failed. Try a more specific ID.';
         renderSessionList();
         return;
       }
       searchResults = parseSessionResults(data);
+      searchError = null;
       renderSessionList();
       updateTimeGate();
     } catch (err) {
+      if (!stillCurrent()) return;
       console.warn('[search] Failed:', err);
       searchResults = null;
+      searchError = err.message || 'Search failed. Try a more specific ID.';
       renderSessionList();
     }
   }, 400);
+}
+
+// Look up a session by exact session_id or conversation_id match.
+// Returns a session object (parseSessionResults shape) or null.
+//
+// Both lookups hit B-tree indexes, so this is fast even on huge tables.
+async function tryExactSessionLookup(query) {
+  // 1. Try chat_messages.session_id directly.
+  let sessionId = query;
+  let { data: rows, error: rowsErr } = await db
+    .from('chat_messages')
+    .select('session_id, created_at, message')
+    .eq('session_id', query)
+    .order('created_at', { ascending: true });
+  if (rowsErr) {
+    console.warn('[search] exact session_id lookup failed:', rowsErr.message);
+    rows = null;
+  }
+
+  if (!rows || rows.length === 0) {
+    // 2. Fall back to visitors_settings.conversation_id → session_id.
+    const { data: vsRow, error: vsErr } = await db
+      .from('visitors_settings')
+      .select('session_id')
+      .eq('conversation_id', query)
+      .limit(1)
+      .maybeSingle();
+    if (vsErr) {
+      console.warn('[search] conversation_id lookup failed:', vsErr.message);
+      return null;
+    }
+    if (!vsRow || !vsRow.session_id) return null;
+    sessionId = vsRow.session_id;
+    const { data: rows2, error: rows2Err } = await db
+      .from('chat_messages')
+      .select('session_id, created_at, message')
+      .eq('session_id', sessionId)
+      .order('created_at', { ascending: true });
+    if (rows2Err || !rows2 || rows2.length === 0) return null;
+    rows = rows2;
+  }
+
+  // Build session metadata client-side and enrich with visitors_settings.
+  const session = buildSessionFromMessages(sessionId, rows);
+  try {
+    const { data: vs } = await db
+      .from('visitors_settings')
+      .select('project, type, language, validation, is_whatsapp, lead_id, case_id, booking_identifier, request_id, masked_client_phone, conversation_id')
+      .eq('session_id', sessionId)
+      .maybeSingle();
+    if (vs) {
+      session.project = vs.project || null;
+      session.visitorType = vs.type || null;
+      session.language = vs.language || null;
+      session.validation = vs.validation || false;
+      session.isWhatsapp = vs.is_whatsapp || false;
+      session.hasLead = vs.lead_id != null;
+      session.hasCase = vs.case_id != null;
+      session.hasBooking = vs.booking_identifier != null;
+      session.requestId = vs.request_id || null;
+      session.maskedClientPhone = vs.masked_client_phone || null;
+      session.conversationId = vs.conversation_id || null;
+    }
+  } catch (vsErr) {
+    console.warn('[search] visitor settings enrichment failed:', vsErr.message);
+  }
+  return session;
+}
+
+// Build a session metadata object from raw chat_messages rows
+// (same shape as parseSessionResults output).
+function buildSessionFromMessages(sessionId, rows) {
+  const typeCounts = { human: 0, ai: 0, tool: 0, system: 0 };
+  const toolSet = new Set();
+  const categorySet = new Set();
+  const requestTypeSet = new Set();
+  let hasVerified = false;
+  let hasEndConversation = false;
+
+  for (const row of rows) {
+    let msg;
+    try { msg = typeof row.message === 'string' ? JSON.parse(row.message) : row.message; }
+    catch (_) { continue; }
+    if (!msg) continue;
+    const type = msg.type || 'unknown';
+    if (typeCounts[type] !== undefined) typeCounts[type]++;
+
+    if (msg.tool_calls && Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0) {
+      for (const tc of msg.tool_calls) { if (tc.name) toolSet.add(tc.name); }
+    }
+    if (type === 'tool' && msg.name) toolSet.add(msg.name);
+
+    if (type === 'ai' && (!msg.tool_calls || msg.tool_calls.length === 0)) {
+      try {
+        let content = typeof msg.content === 'string' ? JSON.parse(msg.content) : msg.content;
+        const out = content?.output || (content && content.text !== undefined ? content : null);
+        if (out) {
+          if (out.request_category) categorySet.add(out.request_category);
+          if (out.request_type) requestTypeSet.add(out.request_type);
+          if (out.identity_verified) hasVerified = true;
+          if (out.end_conversation) hasEndConversation = true;
+        }
+      } catch (_) { /* content not valid JSON */ }
+    }
+  }
+
+  return {
+    id: sessionId,
+    count: rows.length,
+    latest: rows[rows.length - 1].created_at,
+    earliest: rows[0].created_at,
+    tools: Array.from(toolSet),
+    typeCounts,
+    categories: Array.from(categorySet),
+    requestTypes: Array.from(requestTypeSet),
+    hasVerified,
+    hasEndConversation,
+    project: null,
+    visitorType: null,
+    language: null,
+    validation: false,
+    isWhatsapp: false,
+    hasLead: false,
+    hasCase: false,
+    hasBooking: false,
+    requestId: null,
+    maskedClientPhone: null,
+    conversationId: null,
+  };
 }
 
 // Validate date range and show/hide warning (max 3 days)
@@ -1356,6 +1523,7 @@ async function clearFilters() {
   filterDateWarning.style.display = 'none';
   filterApply.disabled = false;
   searchResults = null;
+  searchError = null;
   clearTimeout(searchDebounceTimer);
   sessionSearch.value = '';
 
@@ -1455,6 +1623,17 @@ function renderSessionList() {
   sessionCount.textContent = `${filtered.length} session${filtered.length !== 1 ? 's' : ''}${label}${noMoreSessions ? '' : '+'}`;
 
   sessionList.innerHTML = '';
+
+  // Search error takes priority over empty state — surface timeouts/RPC errors
+  // so a failed search doesn't look like an empty result.
+  if (searchError) {
+    const err = document.createElement('li');
+    err.className = 'session-empty-state';
+    err.innerHTML = `<div>Search failed</div><div style="font-size:0.85em;color:var(--text-secondary);margin-top:0.4em;">${escapeHtml(searchError)}</div>`;
+    sessionList.appendChild(err);
+    sessionCount.textContent = 'Search failed';
+    return;
+  }
 
   if (filtered.length === 0) {
     const empty = document.createElement('li');
