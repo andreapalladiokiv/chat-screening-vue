@@ -632,24 +632,115 @@ async function autoSelectSessionFromURL() {
     return;
   }
 
-  // Session not in loaded list — fetch it specifically via RPC
+  // Session not in loaded list — fetch directly with exact match (uses index,
+  // works for any age). The RPC-based ILIKE search is too slow on large tables.
   try {
-    const { data, error } = await db.rpc('get_session_list', { p_session_id: urlSession, p_limit: 1 });
-    if (error || !data) {
-      console.warn('[url] Failed to fetch linked session:', error);
+    const { data: rows, error } = await db
+      .from('chat_messages')
+      .select('session_id, created_at, message')
+      .eq('session_id', urlSession)
+      .order('created_at', { ascending: true });
+
+    if (error || !rows || rows.length === 0) {
+      console.warn('[url] Deep link session not found:', error || 'no rows');
       return;
     }
-    const fetched = parseSessionResults(data);
-    if (fetched.length > 0) {
-      // Prepend to session list so it appears at the top
-      allSessions.unshift(fetched[0]);
-      sessionMap.set(fetched[0].id, fetched[0]);
-      renderSessionList();
-      selectSession(urlSession);
+
+    // Build session metadata from raw messages
+    const session = buildSessionFromMessages(urlSession, rows);
+
+    // Enrich with visitors_settings (non-blocking — if it fails, we still show the session)
+    try {
+      const { data: vs } = await db
+        .from('visitors_settings')
+        .select('project, type, language, validation, is_whatsapp, lead_id, case_id, booking_identifier, request_id, masked_client_phone, conversation_id')
+        .eq('session_id', urlSession)
+        .limit(1)
+        .single();
+      if (vs) {
+        session.project = vs.project || null;
+        session.visitorType = vs.type || null;
+        session.language = vs.language || null;
+        session.validation = vs.validation || false;
+        session.isWhatsapp = vs.is_whatsapp || false;
+        session.hasLead = vs.lead_id != null;
+        session.hasCase = vs.case_id != null;
+        session.hasBooking = vs.booking_identifier != null;
+        session.requestId = vs.request_id || null;
+        session.maskedClientPhone = vs.masked_client_phone || null;
+        session.conversationId = vs.conversation_id || null;
+      }
+    } catch (vsErr) {
+      console.warn('[url] Failed to enrich deep link session with visitor settings:', vsErr.message);
     }
+
+    allSessions.unshift(session);
+    sessionMap.set(session.id, session);
+    renderSessionList();
+    selectSession(urlSession);
   } catch (err) {
     console.warn('[url] Error fetching linked session:', err.message);
   }
+}
+
+// Build a session metadata object from raw chat_messages rows (same shape as parseSessionResults output)
+function buildSessionFromMessages(sessionId, rows) {
+  const typeCounts = { human: 0, ai: 0, tool: 0, system: 0 };
+  const toolSet = new Set();
+  const categorySet = new Set();
+  const requestTypeSet = new Set();
+  let hasVerified = false;
+  let hasEndConversation = false;
+
+  for (const row of rows) {
+    const msg = typeof row.message === 'string' ? JSON.parse(row.message) : row.message;
+    const type = msg.type || 'unknown';
+    if (typeCounts[type] !== undefined) typeCounts[type]++;
+
+    // Collect tool names
+    if (msg.tool_calls && Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0) {
+      for (const tc of msg.tool_calls) { if (tc.name) toolSet.add(tc.name); }
+    }
+    if (type === 'tool' && msg.name) toolSet.add(msg.name);
+
+    // Extract AI response metadata (final AI messages only)
+    if (type === 'ai' && (!msg.tool_calls || msg.tool_calls.length === 0)) {
+      try {
+        let content = typeof msg.content === 'string' ? JSON.parse(msg.content) : msg.content;
+        const out = content?.output || (content?.text !== undefined ? content : null);
+        if (out) {
+          if (out.request_category) categorySet.add(out.request_category);
+          if (out.request_type) requestTypeSet.add(out.request_type);
+          if (out.identity_verified) hasVerified = true;
+          if (out.end_conversation) hasEndConversation = true;
+        }
+      } catch (_) { /* content not valid JSON */ }
+    }
+  }
+
+  return {
+    id: sessionId,
+    count: rows.length,
+    latest: rows[rows.length - 1].created_at,
+    earliest: rows[0].created_at,
+    tools: Array.from(toolSet),
+    typeCounts,
+    categories: Array.from(categorySet),
+    requestTypes: Array.from(requestTypeSet),
+    hasVerified,
+    hasEndConversation,
+    project: null,
+    visitorType: null,
+    language: null,
+    validation: false,
+    isWhatsapp: false,
+    hasLead: false,
+    hasCase: false,
+    hasBooking: false,
+    requestId: null,
+    maskedClientPhone: null,
+    conversationId: null,
+  };
 }
 
 // ── Realtime ──

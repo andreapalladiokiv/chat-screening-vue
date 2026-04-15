@@ -18,7 +18,8 @@ Update this file whenever a feature is added, changed, or completed.
 - [x] Optional domain restriction via `config.js` `allowedDomains` array — sign-out forced if domain not allowed
 - [x] **User/admin roles** — every signed-in user must have a row in `chat_view_user_roles`; access denied (immediate sign-out) if no row exists
 - [x] **Auth bypass prevention** — `fetchOrCreateUserRole()` is called before the chat panel is shown; removed users can no longer access the app
-- [x] **Connection test with retry** — uses `select('id').limit(1)` (not `count('exact')`) to avoid full table scans; up to 3 attempts (2s delay between retries), 10-second timeout per attempt; Supabase error objects normalized to proper `Error` instances (prevents `[object Object]` display)
+- [x] **Connection test with retry** — uses `select('id').limit(1)` (not `count('exact')`) to avoid full table scans; up to 3 attempts (2s delay between retries), 10s timeout per attempt; Supabase error objects normalized to proper `Error` instances (prevents `[object Object]` display)
+- [x] **Flat AI message content format** — supports both `content.output.text` (wrapped) and `content.text` (flat) AI message formats; code checks `output` first, falls back to top-level `text` property
 - [x] Clear error messages for failed connections (timeout, bad credentials, RLS, domain restriction)
 - [x] Logout button clears auth session, selected environment, and returns to login screen
 - [x] Login card shows the Google sign-in button, an error area, and the optional environment selector (no credential fields, no status log)
@@ -42,7 +43,7 @@ Update this file whenever a feature is added, changed, or completed.
 - [x] Pulsing `• Live` badge shown in top nav bar
 
 ### Session List
-- [x] **Lazy-loading architecture** — default load: 50 most recent sessions via `get_session_list` RPC (two-stage: fast GROUP BY for IDs, then JSONB metadata extraction)
+- [x] **Lazy-loading architecture** — default load: 50 most recent sessions scoped to last 3 days via `get_session_list` RPC (two-stage: fast GROUP BY for IDs, then JSONB metadata extraction) with 15s timeout and retry (up to 2 attempts, 2s delay)
 - [x] **Infinite scroll** — scrolling to the bottom of the session list loads 10 more sessions per batch
 - [x] Sessions grouped by `session_id`, sorted by selected sort order
 - [x] Each session shows: ID (with copy button on hover), total message count, latest date, type-count pills, AI conversation badges
@@ -136,11 +137,11 @@ Update this file whenever a feature is added, changed, or completed.
 - [x] **Configurable timezone** — defaults to browser timezone; click the timezone indicator in the top nav to change; persisted in `localStorage`
 - [x] **Filter by verified / end-conversation** — boolean select filters in the AI Response filter group; applied client-side
 - [x] Cache-busting query param on `app.js` (`?v=64`) — increment when deploying
-- [x] Loading overlay during session load and filter apply
+- [x] Loading overlay (spinner with "Loading..." text) during session load and filter apply
 - [x] "Searching..." indicator in session list during server-side search
 - [x] **Empty states** — "No sessions found" or "No sessions match your filters" with Clear Filters action link
 - [x] **Copy session ID** — hover over session ID in session list to reveal copy button; click copies to clipboard with visual feedback (✓)
-- [x] **Shareable session deep links** — `?session=<id>&env=<index>` URL params; auto-selects session on page load and refresh via `autoSelectSessionFromURL()`; `?env=` restores environment from URL; fetches session via RPC if not in loaded list; both params preserved through OAuth redirects; updated via `history.replaceState`
+- [x] **Shareable session deep links** — `?session=<id>&env=<index>` URL params; auto-selects session on page load and refresh via `autoSelectSessionFromURL()`; `?env=` restores environment from URL; fetches session directly via exact `chat_messages` query (index-backed, works for any session age) with `visitors_settings` enrichment and client-side metadata extraction via `buildSessionFromMessages()`; both params preserved through OAuth redirects; updated via `history.replaceState`
 - [x] **Session ID overflow** — long session IDs truncated with ellipsis in sidebar
 - [x] Global JS error handler shows errors in the browser console
 - [x] CDN load error handler for Supabase library (error shown in `#login-error`)
