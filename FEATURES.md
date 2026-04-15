@@ -69,7 +69,7 @@ Update this file whenever a feature is added, changed, or completed.
 - [x] Invite logic handled by `invite-user` Edge Function (admin-only, requires valid JWT + admin role check)
 
 ### Filtering & Search
-- [x] **Server-side session ID search** — searches the entire `chat_messages` database via ILIKE; debounced at 400ms with "Searching..." indicator; returns up to 50 matches
+- [x] **Server-side session ID / conversation ID search** — two-tier strategy: exact-match fast path via `.eq('session_id', q)` on `chat_messages` and `.eq('conversation_id', q)` on `visitors_settings` (index-backed, instant); falls back to RPC ILIKE substring search (with 10s timeout) only if no exact hit. Surfaces a visible "Search failed" message in the session list when the substring fallback errors or times out instead of silently rendering empty results. Debounced at 400ms.
 - [x] **"Apply Filters" button** — server-side filters (date, tools, categories, request types, message count) applied on click via RPC
 - [x] Datetime range filter (from/to) — `datetime-local` inputs for time-precise filtering; max 3-day gap enforced with warning; auto-fills last 3 days if not specified
 - [x] Message count filter (min/max), inclusive
@@ -135,7 +135,7 @@ Update this file whenever a feature is added, changed, or completed.
 - [x] **Keyboard shortcuts** — `J`/`K` navigate sessions, `E` expand/collapse tools, `R` toggle reviewed, `F` open feedback, `/` focus search, `Escape` close modals, `Ctrl+Shift+F` focus in-session search
 - [x] **Configurable timezone** — defaults to browser timezone; click the timezone indicator in the top nav to change; persisted in `localStorage`
 - [x] **Filter by verified / end-conversation** — boolean select filters in the AI Response filter group; applied client-side
-- [x] Cache-busting query param on `app.js` (`?v=54`) — increment when deploying
+- [x] Cache-busting query param on `app.js` (`?v=64`) — increment when deploying
 - [x] Loading overlay during session load and filter apply
 - [x] "Searching..." indicator in session list during server-side search
 - [x] **Empty states** — "No sessions found" or "No sessions match your filters" with Clear Filters action link
