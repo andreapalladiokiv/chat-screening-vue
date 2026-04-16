@@ -198,6 +198,8 @@ BEGIN
     SELECT session_id, created_at, message
     FROM   chat_messages
     WHERE  session_id = ANY(v_session_ids)
+      AND  (v_date_from IS NULL OR created_at >= v_date_from)
+      AND  (v_date_to   IS NULL OR created_at <= v_date_to)
   ),
   msg_tools AS (
     SELECT DISTINCT s.session_id, tc.val->>'name' AS tool_name

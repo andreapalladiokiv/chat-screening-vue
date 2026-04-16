@@ -153,7 +153,7 @@ RLS is enabled; users may only read their own row (anon key access). A DB trigge
 | Function | Returns | Purpose |
 |---|---|---|
 | `safe_jsonb(val text)` | `jsonb` | Safe JSON cast — returns `NULL` on parse failure instead of raising an error |
-| `get_session_list(...)` | `jsonb` | Two-stage session query: Stage 1 finds candidate session IDs via lightweight GROUP BY; Stage 2 extracts full JSONB metadata + visitors_settings enrichment. Accepts params: `p_limit`, `p_cursor`, `p_date_from`, `p_date_to`, `p_msg_min`, `p_msg_max`, `p_tools`, `p_categories`, `p_request_types`, `p_session_id`, `p_projects`, `p_visitor_types`, `p_languages`, `p_validation`, `p_is_whatsapp`, `p_has_lead`, `p_has_case`, `p_has_booking` |
+| `get_session_list(...)` | `jsonb` | Two-stage session query: Stage 1 finds candidate session IDs via lightweight GROUP BY; Stage 2 extracts JSONB metadata + visitors_settings enrichment **scoped to the same date range** so that message counts, timestamps, tools, and categories reflect only the filtered window. Accepts params: `p_limit`, `p_cursor`, `p_date_from`, `p_date_to`, `p_msg_min`, `p_msg_max`, `p_tools`, `p_categories`, `p_request_types`, `p_session_id`, `p_projects`, `p_visitor_types`, `p_languages`, `p_validation`, `p_is_whatsapp`, `p_has_lead`, `p_has_case`, `p_has_booking` |
 | `get_filter_options()` | `jsonb` | Returns distinct tool names, categories, request types (from last 3 days of `chat_messages`), and projects, visitor types, languages (directly from `visitors_settings`, no date scoping). Uses separate queries for performance. |
 
 ### `visitors_settings` table (pre-existing, not created by this repo)
