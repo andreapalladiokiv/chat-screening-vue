@@ -773,6 +773,12 @@ function unsubscribeRealtime() {
 function handleRealtimeInsert(payload) {
   const row = payload.new;
   if (!row || !row.session_id) return;
+
+  // When server-side filters or search results are active, skip Realtime inserts —
+  // new messages likely fall outside the filtered date/criteria range and would
+  // pollute the view with sessions the user didn't ask for.
+  if (filtersApplied || searchResults !== null) return;
+
   const { session_id: sid, created_at: ts, message: rawMsg } = row;
 
   let msg = null;

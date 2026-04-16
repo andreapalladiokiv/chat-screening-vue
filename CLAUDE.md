@@ -317,7 +317,7 @@ The Edge Function:
       - `#chat-header-bar` — permanent header with `#chat-session-controls` (shows session/conversation ID when selected)
       - `#chat-main` — scrollable message area; wiped and repopulated on session switch
     - `#detail-sidebar` — right panel (320px), shown when a session is selected; contains session controls (reviewed/feedback/expand-collapse), in-session search, quick-jump buttons, duration, message pills, classification, tools, and visitor info
-- `app.js` is loaded with a cache-busting query param (`?v=64`) — increment this when deploying changes
+- `app.js` is loaded with a cache-busting query param (`?v=65`) — increment this when deploying changes
 - Login panel contains only the environment selector (if multi-env), "Sign in with Google" button, and `#login-error`; no credential input fields, no status log
 
 ## Filtering Logic
@@ -357,7 +357,7 @@ Reviewed state is managed client-side (no database writes):
 
 1. **Edge function slug**: The file is `supabase/functions/chat-feedback/` and the frontend calls `db.functions.invoke('chat-feedback', ...)`. The deployed Supabase slug must match — if you redeploy under a different name, update the `invoke` call in `submitFeedback()` (`app.js`) accordingly.
 
-2. **Cache-busting**: `app.js` is loaded as `app.js?v=64`. Increment the version number when deploying updated `app.js` to avoid browsers serving stale cached versions. Forgetting this has caused runtime errors when HTML and JS are out of sync (e.g. removing a DOM element that old JS still references).
+2. **Cache-busting**: `app.js` is loaded as `app.js?v=65`. Increment the version number when deploying updated `app.js` to avoid browsers serving stale cached versions. Forgetting this has caused runtime errors when HTML and JS are out of sync (e.g. removing a DOM element that old JS still references).
 
 3. **config.js is required**: The login UI has no manual credential input fields. If `config.js` is absent and no credentials are saved in `localStorage`, the Google sign-in button will display an error. Always deploy `config.js` alongside `index.html`. Use the multi-env `environments` array format to expose a named dropdown for multiple Supabase projects.
 
@@ -382,6 +382,8 @@ Reviewed state is managed client-side (no database writes):
 13. **Supabase Realtime requires publication + RLS**: For live sidebar updates, `chat_messages` must be added to the `supabase_realtime` publication **and** have a SELECT RLS policy for `authenticated` users. The publication can be checked with `SELECT * FROM pg_publication_tables WHERE pubname = 'supabase_realtime'`. Without both, the WebSocket connects (Live badge turns green) but no events are delivered.
 
 14. **Filter options loaded via RPC at login**: Filter dropdown values (tools, categories, request types, projects, visitor types, languages) are fetched once via `get_filter_options` RPC at login and on refresh. Optionally, `config.js` can define a `filterOptions` object per environment to skip the RPC call — if present and non-empty, the RPC is not called.
+
+15. **Realtime inserts are suppressed during filters/search**: `handleRealtimeInsert` bails out early when `filtersApplied` is true or `searchResults` is non-null. Without this guard, new messages arriving via WebSocket would inject sessions outside the active filter date range into the session list, making it look like filters are ignored.
 
 ## Development Workflow
 

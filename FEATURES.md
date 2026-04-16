@@ -50,7 +50,7 @@ Update this file whenever a feature is added, changed, or completed.
 - [x] Type-count pills: human / ai / tool / system message counts per session
 - [x] AI conversation badges per session: request category, request type, `verified`, `end`, `reviewed` flags (visitor settings badges shown in chat header only)
 - [x] Refresh button reloads sessions (respects active filters)
-- [x] Realtime updates: new messages and sessions appear automatically via Supabase Realtime (INSERT events); auto-reconnects on `CHANNEL_ERROR` / `TIMED_OUT` with 5s retry
+- [x] Realtime updates: new messages and sessions appear automatically via Supabase Realtime (INSERT events); auto-reconnects on `CHANNEL_ERROR` / `TIMED_OUT` with 5s retry; suppressed when server-side filters or search results are active to prevent out-of-range sessions from appearing
 - [x] Pulsing `• Live` badge shown in sidebar header when Realtime channel is active (`SUBSCRIBED`)
 - [x] Filters and sort order preserved across realtime updates and manual refreshes
 - [x] **Time gate** — session info bar shows the time range (last-activity based) of currently loaded sessions
@@ -136,7 +136,7 @@ Update this file whenever a feature is added, changed, or completed.
 - [x] **Keyboard shortcuts** — `J`/`K` navigate sessions, `E` expand/collapse tools, `R` toggle reviewed, `F` open feedback, `/` focus search, `Escape` close modals, `Ctrl+Shift+F` focus in-session search
 - [x] **Configurable timezone** — defaults to browser timezone; click the timezone indicator in the top nav to change; persisted in `localStorage`
 - [x] **Filter by verified / end-conversation** — boolean select filters in the AI Response filter group; applied client-side
-- [x] Cache-busting query param on `app.js` (`?v=64`) — increment when deploying
+- [x] Cache-busting query param on `app.js` (`?v=65`) — increment when deploying
 - [x] Loading overlay (spinner with "Loading..." text) during session load and filter apply
 - [x] "Searching..." indicator in session list during server-side search
 - [x] **Empty states** — "No sessions found" or "No sessions match your filters" with Clear Filters action link
