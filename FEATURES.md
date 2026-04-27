@@ -72,7 +72,7 @@ Update this file whenever a feature is added, changed, or completed.
 ### Filtering & Search
 - [x] **Server-side session ID / conversation ID search** — two-tier strategy: exact-match fast path via `.eq('session_id', q)` on `chat_messages` and `.eq('conversation_id', q)` on `visitors_settings` (index-backed, instant); falls back to RPC ILIKE substring search (with 10s timeout) only if no exact hit. Surfaces a visible "Search failed" message in the session list when the substring fallback errors or times out instead of silently rendering empty results. Debounced at 400ms.
 - [x] **"Apply Filters" button** — server-side filters (date, tools, categories, request types, message count) applied on click via RPC
-- [x] Datetime range filter (from/to) — `datetime-local` inputs for time-precise filtering; max 3-day gap enforced with warning; auto-fills last 3 days if not specified
+- [x] Datetime range filter (from/to) — `datetime-local` inputs for time-precise filtering; max 7-day gap enforced with warning (`FILTER_DATE_RANGE_MAX_DAYS`, matches the SQL safety-net fallback); auto-fills last 3 days if not specified
 - [x] Message count filter (min/max), inclusive
 - [x] Tools filter: multi-select dropdown+checklist, AND logic (session must use ALL selected tools)
 - [x] Category filter: multi-select dropdown+checklist, OR logic (session matches any selected category)
@@ -138,7 +138,7 @@ Update this file whenever a feature is added, changed, or completed.
 - [x] **Keyboard shortcuts** — `J`/`K` navigate sessions, `E` expand/collapse tools, `R` toggle reviewed, `F` open feedback, `/` focus search, `Escape` close modals, `Ctrl+Shift+F` focus in-session search
 - [x] **Configurable timezone** — defaults to browser timezone; click the timezone indicator in the top nav to change; persisted in `localStorage`
 - [x] **Filter by verified / end-conversation** — boolean select filters in the AI Response filter group; applied client-side
-- [x] Cache-busting query param on `app.js` (`?v=66`) — increment when deploying
+- [x] Cache-busting query param on `app.js` (`?v=67`) — increment when deploying
 - [x] Loading overlay (spinner with "Loading..." text) during session load and filter apply
 - [x] "Searching..." indicator in session list during server-side search
 - [x] **Empty states** — "No sessions found" or "No sessions match your filters" with Clear Filters action link
