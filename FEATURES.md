@@ -19,7 +19,7 @@ Update this file whenever a feature is added, changed, or completed.
 - [x] **User/admin roles** — every signed-in user must have a row in `chat_view_user_roles`; access denied (immediate sign-out) if no row exists
 - [x] **Auth bypass prevention** — `fetchOrCreateUserRole()` is called before the chat panel is shown; removed users can no longer access the app
 - [x] **Connection test with retry** — uses `select('id').limit(1)` (not `count('exact')`) to avoid full table scans; up to 3 attempts (2s delay between retries), 10s timeout per attempt; Supabase error objects normalized to proper `Error` instances (prevents `[object Object]` display)
-- [x] **Flat AI message content format** — supports both `content.output.text` (wrapped) and `content.text` (flat) AI message formats; code checks `output` first, falls back to top-level `text` property
+- [x] **Flat AI message content format** — supports both `content.output.text` (wrapped) and `content.text` (flat) AI message formats end-to-end: message rendering, session-list badges, classification badges in the detail sidebar, Realtime in-place updates, the `get_session_list` Stage 1 + Stage 2 metadata extraction, and the `get_filter_options` category/request-type aggregation all check `output` first and fall back to the top-level fields
 - [x] Clear error messages for failed connections (timeout, bad credentials, RLS, domain restriction)
 - [x] Logout button clears auth session, selected environment, and returns to login screen
 - [x] Login card shows the Google sign-in button, an error area, and the optional environment selector (no credential fields, no status log)

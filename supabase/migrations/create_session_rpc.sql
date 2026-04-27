@@ -124,22 +124,28 @@ BEGIN
       WHERE  b.message->>'type' = 'tool' AND b.message->>'name' IS NOT NULL
     ),
     ai_meta AS (
+      -- Supports both wrapped (content.output.request_category) and flat
+      -- (content.request_category) AI message formats: COALESCE prefers the
+      -- nested .output object when present, else falls back to content itself.
       SELECT b.session_id,
              parsed.ao->>'request_category' AS category,
              parsed.ao->>'request_type'     AS request_type
       FROM base b,
       LATERAL (
-        SELECT CASE
-          WHEN jsonb_typeof(b.message->'content') = 'object' THEN b.message->'content'->'output'
-          WHEN jsonb_typeof(b.message->'content') = 'string' THEN safe_jsonb(b.message->>'content')->'output'
-          ELSE NULL
-        END AS ao
+        SELECT COALESCE(content_obj->'output', content_obj) AS ao
+        FROM (
+          SELECT CASE
+            WHEN jsonb_typeof(b.message->'content') = 'object' THEN b.message->'content'
+            WHEN jsonb_typeof(b.message->'content') = 'string' THEN safe_jsonb(b.message->>'content')
+            ELSE NULL
+          END AS content_obj
+        ) parsed_content
       ) parsed
       WHERE b.message->>'type' = 'ai'
         AND (b.message->'tool_calls' IS NULL
              OR jsonb_typeof(b.message->'tool_calls') != 'array'
              OR jsonb_array_length(b.message->'tool_calls') = 0)
-        AND parsed.ao IS NOT NULL
+        AND jsonb_typeof(parsed.ao) = 'object'
     ),
     session_stats AS (
       SELECT session_id, COUNT(*) AS msg_count, MAX(created_at) AS latest
@@ -216,6 +222,9 @@ BEGIN
     WHERE  s.message->>'type' = 'tool' AND s.message->>'name' IS NOT NULL
   ),
   ai_meta AS (
+    -- Supports both wrapped (content.output.request_category) and flat
+    -- (content.request_category) AI message formats: COALESCE prefers the
+    -- nested .output object when present, else falls back to content itself.
     SELECT s.session_id,
            parsed.ao->>'request_category'                                AS category,
            parsed.ao->>'request_type'                                    AS request_type,
@@ -223,17 +232,20 @@ BEGIN
            COALESCE((parsed.ao->>'end_conversation')::boolean, false)    AS end_conversation
     FROM scoped s,
     LATERAL (
-      SELECT CASE
-        WHEN jsonb_typeof(s.message->'content') = 'object' THEN s.message->'content'->'output'
-        WHEN jsonb_typeof(s.message->'content') = 'string' THEN safe_jsonb(s.message->>'content')->'output'
-        ELSE NULL
-      END AS ao
+      SELECT COALESCE(content_obj->'output', content_obj) AS ao
+      FROM (
+        SELECT CASE
+          WHEN jsonb_typeof(s.message->'content') = 'object' THEN s.message->'content'
+          WHEN jsonb_typeof(s.message->'content') = 'string' THEN safe_jsonb(s.message->>'content')
+          ELSE NULL
+        END AS content_obj
+      ) parsed_content
     ) parsed
     WHERE s.message->>'type' = 'ai'
       AND (s.message->'tool_calls' IS NULL
            OR jsonb_typeof(s.message->'tool_calls') != 'array'
            OR jsonb_array_length(s.message->'tool_calls') = 0)
-      AND parsed.ao IS NOT NULL
+      AND jsonb_typeof(parsed.ao) = 'object'
   ),
   session_stats AS (
     SELECT session_id,
@@ -333,42 +345,51 @@ BEGIN
     WHERE  cm.created_at >= v_since AND cm.message->>'type' = 'tool' AND cm.message->>'name' IS NOT NULL
   ) t;
 
+  -- Supports both wrapped (content.output.request_category) and flat
+  -- (content.request_category) AI message formats: COALESCE prefers the
+  -- nested .output object when present, else falls back to content itself.
   SELECT COALESCE(jsonb_agg(DISTINCT name ORDER BY name), '[]'::jsonb) INTO v_categories
   FROM (
     SELECT parsed->>'request_category' AS name
     FROM (
-      SELECT CASE
-        WHEN jsonb_typeof(cm.message->'content') = 'object' THEN cm.message->'content'->'output'
-        WHEN jsonb_typeof(cm.message->'content') = 'string' THEN safe_jsonb(cm.message->>'content')->'output'
-        ELSE NULL
-      END AS parsed
-      FROM chat_messages cm
-      WHERE cm.created_at >= v_since
-        AND cm.message->>'type' = 'ai'
-        AND (cm.message->'tool_calls' IS NULL
-             OR jsonb_typeof(cm.message->'tool_calls') != 'array'
-             OR jsonb_array_length(cm.message->'tool_calls') = 0)
+      SELECT COALESCE(content_obj->'output', content_obj) AS parsed
+      FROM (
+        SELECT CASE
+          WHEN jsonb_typeof(cm.message->'content') = 'object' THEN cm.message->'content'
+          WHEN jsonb_typeof(cm.message->'content') = 'string' THEN safe_jsonb(cm.message->>'content')
+          ELSE NULL
+        END AS content_obj
+        FROM chat_messages cm
+        WHERE cm.created_at >= v_since
+          AND cm.message->>'type' = 'ai'
+          AND (cm.message->'tool_calls' IS NULL
+               OR jsonb_typeof(cm.message->'tool_calls') != 'array'
+               OR jsonb_array_length(cm.message->'tool_calls') = 0)
+      ) parsed_content
     ) sub
-    WHERE parsed->>'request_category' IS NOT NULL
+    WHERE jsonb_typeof(parsed) = 'object' AND parsed->>'request_category' IS NOT NULL
   ) c;
 
   SELECT COALESCE(jsonb_agg(DISTINCT name ORDER BY name), '[]'::jsonb) INTO v_request_types
   FROM (
     SELECT parsed->>'request_type' AS name
     FROM (
-      SELECT CASE
-        WHEN jsonb_typeof(cm.message->'content') = 'object' THEN cm.message->'content'->'output'
-        WHEN jsonb_typeof(cm.message->'content') = 'string' THEN safe_jsonb(cm.message->>'content')->'output'
-        ELSE NULL
-      END AS parsed
-      FROM chat_messages cm
-      WHERE cm.created_at >= v_since
-        AND cm.message->>'type' = 'ai'
-        AND (cm.message->'tool_calls' IS NULL
-             OR jsonb_typeof(cm.message->'tool_calls') != 'array'
-             OR jsonb_array_length(cm.message->'tool_calls') = 0)
+      SELECT COALESCE(content_obj->'output', content_obj) AS parsed
+      FROM (
+        SELECT CASE
+          WHEN jsonb_typeof(cm.message->'content') = 'object' THEN cm.message->'content'
+          WHEN jsonb_typeof(cm.message->'content') = 'string' THEN safe_jsonb(cm.message->>'content')
+          ELSE NULL
+        END AS content_obj
+        FROM chat_messages cm
+        WHERE cm.created_at >= v_since
+          AND cm.message->>'type' = 'ai'
+          AND (cm.message->'tool_calls' IS NULL
+               OR jsonb_typeof(cm.message->'tool_calls') != 'array'
+               OR jsonb_array_length(cm.message->'tool_calls') = 0)
+      ) parsed_content
     ) sub
-    WHERE parsed->>'request_type' IS NOT NULL
+    WHERE jsonb_typeof(parsed) = 'object' AND parsed->>'request_type' IS NOT NULL
   ) r;
 
   -- ── Visitor options from visitors_settings directly (no chat_messages join) ──

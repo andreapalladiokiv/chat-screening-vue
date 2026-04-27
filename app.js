@@ -138,7 +138,9 @@ function loadFilterOptionsFromConfig() {
     || allProjects.length > 0 || allVisitorTypes.length > 0 || allLanguages.length > 0;
 }
 
-// Fallback: fetch filter options from DB when config.js has none
+// Fetch filter options from DB and fill in any keys that config.js didn't
+// provide. Per-key merge so a partial `filterOptions` in config (e.g. tools
+// listed but categories omitted) still gets the missing dropdowns populated.
 async function loadFilterOptionsFromRPC() {
   try {
     const rpcPromise = db.rpc('get_filter_options');
@@ -151,16 +153,24 @@ async function loadFilterOptionsFromRPC() {
       return;
     }
     if (data) {
-      allToolNames = (data.tools || []).sort();
-      allCategories = (data.categories || []).sort();
-      allRequestTypes = (data.request_types || []).sort();
-      allProjects = (data.projects || []).sort();
-      allVisitorTypes = (data.visitor_types || []).sort();
-      allLanguages = (data.languages || []).sort();
+      if (!allToolNames.length)    allToolNames    = (data.tools         || []).sort();
+      if (!allCategories.length)   allCategories   = (data.categories    || []).sort();
+      if (!allRequestTypes.length) allRequestTypes = (data.request_types || []).sort();
+      if (!allProjects.length)     allProjects     = (data.projects      || []).sort();
+      if (!allVisitorTypes.length) allVisitorTypes = (data.visitor_types || []).sort();
+      if (!allLanguages.length)    allLanguages    = (data.languages     || []).sort();
     }
   } catch (err) {
     console.warn('[filters] loadFilterOptionsFromRPC skipped:', err.message);
   }
+}
+
+// Returns true when every dropdown source list is non-empty — used to decide
+// whether the RPC fallback is needed. Mirror this list when adding new
+// filterable dimensions.
+function allFilterListsPopulated() {
+  return allToolNames.length > 0 && allCategories.length > 0 && allRequestTypes.length > 0
+    && allProjects.length > 0 && allVisitorTypes.length > 0 && allLanguages.length > 0;
 }
 
 // ── Init ──
@@ -496,10 +506,11 @@ async function afterAuthSuccess(user) {
     logStatus('Loading sessions...');
     loadingOverlay.style.display = 'flex';
 
-    // Load filter options: prefer config.js, fall back to RPC if empty
-    const hasConfigFilters = loadFilterOptionsFromConfig();
+    // Load filter options: prefer config.js, fall back to RPC for any
+    // dropdown the config didn't provide (per-key merge).
+    loadFilterOptionsFromConfig();
     const sessionsPromise = loadDefaultSessions();
-    if (!hasConfigFilters) await loadFilterOptionsFromRPC();
+    if (!allFilterListsPopulated()) await loadFilterOptionsFromRPC();
     const sessionsResult = await sessionsPromise;
 
     if (!sessionsResult.ok) {
@@ -597,9 +608,10 @@ async function handleRefresh() {
   refreshBtn.textContent = 'Refreshing...';
   sessionCount.textContent = 'Refreshing sessions...';
 
-  // Refresh filter options (RPC fallback if config is empty)
-  const hasConfigFilters = loadFilterOptionsFromConfig();
-  if (!hasConfigFilters) await loadFilterOptionsFromRPC();
+  // Refresh filter options: re-read from config, then fill any empty
+  // dropdown via the RPC fallback (per-key merge).
+  loadFilterOptionsFromConfig();
+  if (!allFilterListsPopulated()) await loadFilterOptionsFromRPC();
 
   // Re-run current view (default or filtered)
   if (filtersApplied && currentFilterParams) {
@@ -821,8 +833,9 @@ function handleRealtimeInsert(payload) {
     if (t === 'ai' && !(msg.tool_calls && msg.tool_calls.length)) {
       let c = msg.content;
       try { if (typeof c === 'string') c = JSON.parse(c); } catch (e) { c = null; }
-      if (c && c.output) {
-        const { request_category: cat, request_type: rtype, identity_verified, end_conversation } = c.output;
+      const out = c?.output || (c?.text !== undefined ? c : null);
+      if (out) {
+        const { request_category: cat, request_type: rtype, identity_verified, end_conversation } = out;
         if (cat && !session.categories.includes(cat)) session.categories.push(cat);
         if (rtype && !session.requestTypes.includes(rtype)) session.requestTypes.push(rtype);
         if (identity_verified) session.hasVerified = true;
