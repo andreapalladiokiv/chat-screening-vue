@@ -1423,13 +1423,18 @@ function buildSessionFromMessages(sessionId, rows) {
 }
 
 // Validate date range and show/hide warning (max 3 days)
+// Cap the date range at 7 days to match the SQL safety-net fallback in
+// get_session_list (`v_date_from := NOW() - INTERVAL '7 days'`). The SQL is
+// designed for ranges up to a week; longer windows risk slow JSONB scans.
+const FILTER_DATE_RANGE_MAX_DAYS = 7;
+
 function validateDateRange() {
   const from = filterDateFrom.value;
   const to = filterDateTo.value;
   if (from && to) {
     const diffMs = new Date(to) - new Date(from);
     const diffDays = diffMs / (1000 * 60 * 60 * 24);
-    if (diffDays > 3 || diffDays < 0) {
+    if (diffDays > FILTER_DATE_RANGE_MAX_DAYS || diffDays < 0) {
       filterDateWarning.style.display = 'block';
       filterApply.disabled = true;
       return false;
