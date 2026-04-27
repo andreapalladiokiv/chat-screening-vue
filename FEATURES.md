@@ -89,6 +89,8 @@ Update this file whenever a feature is added, changed, or completed.
   - Clicking outside any open dropdown closes it; opening one closes the others
   - Checked state preserved when realtime updates rebuild dropdown options
 - [x] Filter dropdown options populated from `get_filter_options` RPC (scoped to last 7 days)
+- [x] **Authoritative client-side filter predicate** — after Apply, normalized filter criteria are stored in `currentFilterCriteria` and `renderSessionList` runs every session through `sessionMatchesFilter` (mirrors the RPC's AND/OR semantics). Guarantees the visible list always matches the active filters even if `allSessions` / `searchResults` contains non-matching items. Verified / end-conversation filters live in the same predicate as a single source of truth. Lenient on async-loading visitor settings (no false rejections during enrichment).
+- [x] **Filter error visibility & rollback** — if the `get_session_list` RPC fails, `applyFilters` resets `filtersApplied` / `currentFilterParams` / `currentFilterCriteria` and surfaces the error message in the session count, so Realtime resumes and the user isn't left in a stale half-filtered state.
 
 ### Message View
 - [x] Messages loaded on session click, ordered by `created_at` ascending
@@ -136,7 +138,7 @@ Update this file whenever a feature is added, changed, or completed.
 - [x] **Keyboard shortcuts** — `J`/`K` navigate sessions, `E` expand/collapse tools, `R` toggle reviewed, `F` open feedback, `/` focus search, `Escape` close modals, `Ctrl+Shift+F` focus in-session search
 - [x] **Configurable timezone** — defaults to browser timezone; click the timezone indicator in the top nav to change; persisted in `localStorage`
 - [x] **Filter by verified / end-conversation** — boolean select filters in the AI Response filter group; applied client-side
-- [x] Cache-busting query param on `app.js` (`?v=65`) — increment when deploying
+- [x] Cache-busting query param on `app.js` (`?v=66`) — increment when deploying
 - [x] Loading overlay (spinner with "Loading..." text) during session load and filter apply
 - [x] "Searching..." indicator in session list during server-side search
 - [x] **Empty states** — "No sessions found" or "No sessions match your filters" with Clear Filters action link

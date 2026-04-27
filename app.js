@@ -18,6 +18,7 @@ let isLoadingMore = false;   // guard against concurrent scroll-loads
 let noMoreSessions = false;  // true when server returned fewer than requested
 let filtersApplied = false;  // true when server-side filters are active
 let currentFilterParams = null; // stored RPC params when filters are applied (for loadMore)
+let currentFilterCriteria = null; // normalized filter criteria for client-side predicate evaluation in renderSessionList
 let searchResults = null;       // non-null when server-side session_id search is active
 let searchError = null;         // error message shown in session list when a search fails or times out
 let searchDebounceTimer = null; // debounce timer for search input
@@ -563,6 +564,7 @@ async function handleLogout() {
   noMoreSessions = false;
   filtersApplied = false;
   currentFilterParams = null;
+  currentFilterCriteria = null;
   searchResults = null;
   searchError = null;
   clearTimeout(searchDebounceTimer);
@@ -1042,11 +1044,82 @@ function parseSessionResults(rows) {
   }));
 }
 
+// Predicate: does a session match the active filter criteria?
+// Mirrors the server-side semantics in get_session_list. Used as a client-side
+// safety net in renderSessionList so the visible list always reflects the
+// active filters, regardless of what's in allSessions / searchResults.
+//
+// For visitor-settings fields that load asynchronously (project, visitorType,
+// language, validation, isWhatsapp, hasLead, hasCase, hasBooking), be lenient
+// when the data isn't back yet — defer judgment until enrichment lands.
+function sessionMatchesFilter(session, criteria) {
+  if (!criteria) return true;
+
+  if (criteria.dateFrom && session.latest && session.latest < criteria.dateFrom) return false;
+  if (criteria.dateTo && session.earliest && session.earliest > criteria.dateTo) return false;
+
+  if (criteria.msgMin !== null && criteria.msgMin !== undefined && session.count < criteria.msgMin) return false;
+  if (criteria.msgMax !== null && criteria.msgMax !== undefined && session.count > criteria.msgMax) return false;
+
+  if (criteria.tools && criteria.tools.length > 0) {
+    const have = session.tools || [];
+    for (const t of criteria.tools) if (!have.includes(t)) return false;
+  }
+
+  if (criteria.categories && criteria.categories.length > 0) {
+    const have = session.categories || [];
+    if (!criteria.categories.some(c => have.includes(c))) return false;
+  }
+
+  if (criteria.requestTypes && criteria.requestTypes.length > 0) {
+    const have = session.requestTypes || [];
+    if (!criteria.requestTypes.some(r => have.includes(r))) return false;
+  }
+
+  // Visitor-settings filters: if the session's enrichment hasn't loaded yet,
+  // don't reject — the next render after fetchVisitorSettings resolves will re-evaluate.
+  if (criteria.projects && criteria.projects.length > 0) {
+    if (session.project != null && !criteria.projects.includes(session.project)) return false;
+  }
+  if (criteria.visitorTypes && criteria.visitorTypes.length > 0) {
+    if (session.visitorType != null && !criteria.visitorTypes.includes(session.visitorType)) return false;
+  }
+  if (criteria.languages && criteria.languages.length > 0) {
+    if (session.language != null && !criteria.languages.includes(session.language)) return false;
+  }
+
+  if (criteria.validation !== null && criteria.validation !== undefined) {
+    if (Boolean(session.validation) !== criteria.validation) return false;
+  }
+  if (criteria.isWhatsapp !== null && criteria.isWhatsapp !== undefined) {
+    if (Boolean(session.isWhatsapp) !== criteria.isWhatsapp) return false;
+  }
+  if (criteria.hasLead !== null && criteria.hasLead !== undefined) {
+    if (Boolean(session.hasLead) !== criteria.hasLead) return false;
+  }
+  if (criteria.hasCase !== null && criteria.hasCase !== undefined) {
+    if (Boolean(session.hasCase) !== criteria.hasCase) return false;
+  }
+  if (criteria.hasBooking !== null && criteria.hasBooking !== undefined) {
+    if (Boolean(session.hasBooking) !== criteria.hasBooking) return false;
+  }
+
+  if (criteria.verified !== null && criteria.verified !== undefined) {
+    if (Boolean(session.hasVerified) !== criteria.verified) return false;
+  }
+  if (criteria.endConversation !== null && criteria.endConversation !== undefined) {
+    if (Boolean(session.hasEndConversation) !== criteria.endConversation) return false;
+  }
+
+  return true;
+}
+
 // Default load: most recent 50 sessions, no filters.
 // Returns { ok: true } on success or { ok: false, error: string } on failure.
 async function loadDefaultSessions() {
   filtersApplied = false;
   currentFilterParams = null;
+  currentFilterCriteria = null;
   sessionCursor = null;
   noMoreSessions = false;
 
@@ -1440,33 +1513,64 @@ async function applyFilters() {
   if (hasCaseVal) params.p_has_case = hasCaseVal === 'true';
   if (hasBookingVal) params.p_has_booking = hasBookingVal === 'true';
 
-  filtersApplied = true;
-  // Store filter params (without p_limit / p_cursor) for loadMore
-  currentFilterParams = { ...params };
-  delete currentFilterParams.p_limit;
-  delete currentFilterParams.p_cursor;
-  sessionCursor = null;
-  noMoreSessions = false;
+  // Build normalized client-side criteria (used by sessionMatchesFilter in renderSessionList).
+  // verified/endConversation are NOT sent to the server — they're client-side only — but they
+  // belong in the same predicate so renderSessionList has a single source of truth.
+  const criteria = {
+    dateFrom: params.p_date_from || null,
+    dateTo: params.p_date_to || null,
+    msgMin: msgMin !== null && !isNaN(msgMin) ? msgMin : null,
+    msgMax: msgMax !== null && !isNaN(msgMax) ? msgMax : null,
+    tools: selectedTools.length > 0 ? selectedTools : null,
+    categories: selectedCategories.length > 0 ? selectedCategories : null,
+    requestTypes: selectedReqTypes.length > 0 ? selectedReqTypes : null,
+    projects: selectedProjects.length > 0 ? selectedProjects : null,
+    visitorTypes: selectedVisitorTypes.length > 0 ? selectedVisitorTypes : null,
+    languages: selectedLanguages.length > 0 ? selectedLanguages : null,
+    validation: validationVal ? validationVal === 'true' : null,
+    isWhatsapp: whatsappVal ? whatsappVal === 'true' : null,
+    hasLead: hasLeadVal ? hasLeadVal === 'true' : null,
+    hasCase: hasCaseVal ? hasCaseVal === 'true' : null,
+    hasBooking: hasBookingVal ? hasBookingVal === 'true' : null,
+    verified: verifiedVal ? verifiedVal === 'true' : null,
+    endConversation: endConvVal ? endConvVal === 'true' : null,
+  };
 
   loadingOverlay.style.display = 'flex';
   try {
     const { data, error } = await db.rpc('get_session_list', params);
     if (error) {
+      // Surface visibly + roll back filter state so Realtime resumes and the user
+      // isn't stuck in a half-filtered state where the visible list is stale.
       console.error('applyFilters error:', error);
-      sessionCount.textContent = 'Filter query failed.';
+      filtersApplied = false;
+      currentFilterParams = null;
+      currentFilterCriteria = null;
+      const errMsg = error.message || error.details || 'Filter query failed.';
+      sessionCount.textContent = 'Filter query failed: ' + errMsg;
       return;
     }
+    // Only commit filter state after a successful response.
     allSessions = parseSessionResults(data);
-    if (allSessions.length > 0) {
-      sessionCursor = allSessions[allSessions.length - 1].latest;
-    }
-    if (allSessions.length < 50) noMoreSessions = true;
+    sessionCursor = allSessions.length > 0 ? allSessions[allSessions.length - 1].latest : null;
+    noMoreSessions = allSessions.length < 50;
+
+    filtersApplied = true;
+    currentFilterCriteria = criteria;
+    // Store filter params (without p_limit / p_cursor) for loadMore
+    currentFilterParams = { ...params };
+    delete currentFilterParams.p_limit;
+    delete currentFilterParams.p_cursor;
 
     rebuildSessionMap();
     renderSessionList();
     updateTimeGate();
   } catch (err) {
     console.error('applyFilters failed:', err);
+    filtersApplied = false;
+    currentFilterParams = null;
+    currentFilterCriteria = null;
+    sessionCount.textContent = 'Filter query failed: ' + (err.message || String(err));
   } finally {
     loadingOverlay.style.display = 'none';
   }
@@ -1586,28 +1690,28 @@ function buildSessionBadgesHtml(session) {
 }
 
 function renderSessionList() {
-  // Client-side filters only: reviewed, sort
-  // Server-side: date, tools, categories, session_id search — applied via the RPC
+  // Server RPC narrows server-side; sessionMatchesFilter is the authoritative
+  // client-side gate so the visible list always matches the active criteria,
+  // even if allSessions / searchResults contain stale or non-matching entries.
   const sortBy = filterSort.value;
   const reviewedFilter = filterReviewed.value; // 'all', 'reviewed', 'unreviewed'
 
   // When a server search is active, use those results instead of allSessions
   let filtered = searchResults !== null ? searchResults : allSessions;
 
-  // Reviewed filter
+  // Authoritative server/client filter parity: re-apply filter criteria locally
+  // when filters are active. Guarantees the visible list reflects the user's
+  // selection regardless of how items got into allSessions / searchResults.
+  if (filtersApplied && currentFilterCriteria) {
+    filtered = filtered.filter(s => sessionMatchesFilter(s, currentFilterCriteria));
+  }
+
+  // Reviewed filter (always client-side, no server equivalent)
   if (reviewedFilter === 'reviewed') {
     filtered = filtered.filter((s) => reviewedSessions.has(s.id));
   } else if (reviewedFilter === 'unreviewed') {
     filtered = filtered.filter((s) => !reviewedSessions.has(s.id));
   }
-
-  // Verified / End conversation client-side filters
-  const verifiedFilter = filterVerified ? filterVerified.value : '';
-  const endConvFilter = filterEndConv ? filterEndConv.value : '';
-  if (verifiedFilter === 'true') filtered = filtered.filter(s => s.hasVerified);
-  else if (verifiedFilter === 'false') filtered = filtered.filter(s => !s.hasVerified);
-  if (endConvFilter === 'true') filtered = filtered.filter(s => s.hasEndConversation);
-  else if (endConvFilter === 'false') filtered = filtered.filter(s => !s.hasEndConversation);
 
   // Sort
   filtered = [...filtered];
@@ -2605,6 +2709,7 @@ async function handleEnvSwitch() {
   sessionCursor = null;
   filtersApplied = false;
   currentFilterParams = null;
+  currentFilterCriteria = null;
   noMoreSessions = false;
 
   // Initialize new client and trigger OAuth

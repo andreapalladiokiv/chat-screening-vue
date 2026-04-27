@@ -317,14 +317,14 @@ The Edge Function:
       - `#chat-header-bar` — permanent header with `#chat-session-controls` (shows session/conversation ID when selected)
       - `#chat-main` — scrollable message area; wiped and repopulated on session switch
     - `#detail-sidebar` — right panel (320px), shown when a session is selected; contains session controls (reviewed/feedback/expand-collapse), in-session search, quick-jump buttons, duration, message pills, classification, tools, and visitor info
-- `app.js` is loaded with a cache-busting query param (`?v=65`) — increment this when deploying changes
+- `app.js` is loaded with a cache-busting query param (`?v=66`) — increment this when deploying changes
 - Login panel contains only the environment selector (if multi-env), "Sign in with Google" button, and `#login-error`; no credential input fields, no status log
 
 ## Filtering Logic
 
-Filtering is split between server-side (RPC) and client-side:
+Filtering uses a **two-layer approach**: the server narrows the candidate set for performance, and the client re-applies the same criteria as an authoritative gate so the visible list is always congruent with the user's selection.
 
-**Server-side (via `get_session_list` RPC, triggered by "Apply Filters" button):**
+**Layer 1 — Server-side (via `get_session_list` RPC, triggered by "Apply Filters" button):**
 - **Date range** — max 3-day gap enforced by the UI; auto-fills last 3 days if not specified
 - **Message count** — inclusive min/max
 - **Tools** — session must contain **all** selected tools (AND logic)
@@ -337,12 +337,16 @@ Filtering is split between server-side (RPC) and client-side:
 - **WhatsApp** — exact boolean match (via `visitors_settings`)
 - **Has lead / Has case / Has booking** — boolean presence filters (via `visitors_settings`)
 
+**Layer 2 — Client-side authoritative predicate (`sessionMatchesFilter`, applied in `renderSessionList`):**
+- After a successful Apply, `applyFilters` stores normalized criteria in `currentFilterCriteria`. `renderSessionList` runs every session through `sessionMatchesFilter` whenever `filtersApplied` is true. This guarantees the visible list reflects the criteria even if `allSessions`/`searchResults` contains non-matching items (RPC bugs, future Realtime relaxations, manual injection, etc.). Mirrors the server's AND/OR semantics. Visitor-settings fields (project, type, language, etc.) are **lenient when null** — sessions still loading async enrichment aren't rejected; the next render after `fetchVisitorSettings` resolves re-evaluates them. The `verified` and `endConversation` filters are client-side only (no server params) and live in the same predicate as a single source of truth.
+- On RPC failure, `applyFilters` resets `filtersApplied` / `currentFilterParams` / `currentFilterCriteria` and surfaces the error in the session count, so Realtime resumes and the user isn't stuck in a half-filtered state.
+
 **Server-side search (debounced, via search input):**
 - **Session ID / Conversation ID search** — ILIKE substring match on `session_id` or `visitors_settings.conversation_id` across the entire database; 400ms debounce; returns up to 50 results
 
-**Client-side (instant, in `renderSessionList()`):**
+**Always client-side (instant, in `renderSessionList()`):**
 - **Sort** — newest / oldest / most messages / fewest messages (sorts loaded sessions only)
-- **Reviewed** — `all` / `reviewed` / `unreviewed`
+- **Reviewed** — `all` / `reviewed` / `unreviewed` (no server equivalent)
 
 ## Mark as Reviewed
 
@@ -357,7 +361,7 @@ Reviewed state is managed client-side (no database writes):
 
 1. **Edge function slug**: The file is `supabase/functions/chat-feedback/` and the frontend calls `db.functions.invoke('chat-feedback', ...)`. The deployed Supabase slug must match — if you redeploy under a different name, update the `invoke` call in `submitFeedback()` (`app.js`) accordingly.
 
-2. **Cache-busting**: `app.js` is loaded as `app.js?v=65`. Increment the version number when deploying updated `app.js` to avoid browsers serving stale cached versions. Forgetting this has caused runtime errors when HTML and JS are out of sync (e.g. removing a DOM element that old JS still references).
+2. **Cache-busting**: `app.js` is loaded as `app.js?v=66`. Increment the version number when deploying updated `app.js` to avoid browsers serving stale cached versions. Forgetting this has caused runtime errors when HTML and JS are out of sync (e.g. removing a DOM element that old JS still references).
 
 3. **config.js is required**: The login UI has no manual credential input fields. If `config.js` is absent and no credentials are saved in `localStorage`, the Google sign-in button will display an error. Always deploy `config.js` alongside `index.html`. Use the multi-env `environments` array format to expose a named dropdown for multiple Supabase projects.
 
