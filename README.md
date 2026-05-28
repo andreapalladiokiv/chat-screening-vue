@@ -14,7 +14,13 @@ A single-page web application for reviewing AI chat conversations stored in Supa
 1. Create `config.js` with your Supabase credentials (see `CLAUDE.md` for format)
 2. Run the SQL migrations in `supabase/migrations/`
 3. Deploy Edge Functions: `supabase functions deploy chat-feedback` and `supabase functions deploy invite-user`
-4. Open `index.html` in a browser
+4. Run locally:
+   ```bash
+   docker compose up -d        # http://localhost:8080
+   ```
+   Or open `index.html` directly in a browser / serve with any static server.
+
+The `docker-compose.yml` is intended **for local development only** — it runs `nginx:alpine` on port 8080 with bind-mounted sources and caching disabled, so edits reflect on reload.
 
 ## Documentation
 

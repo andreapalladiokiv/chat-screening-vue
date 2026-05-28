@@ -20,6 +20,9 @@ chat-view/
 ├── FEATURES.md                             # Feature list and todo tracker
 ├── README.md                               # Project overview
 ├── SETUP.md                                # Google OAuth setup guide
+├── docker-compose.yml                      # Local-only: nginx static server on :8080
+├── docker/
+│   └── nginx.conf                          # Local-only: no-cache + repo-internals deny rules
 └── supabase/
     ├── functions/
     │   ├── chat-feedback/
@@ -57,11 +60,18 @@ chat-view/
 No build step is needed. Open `index.html` directly in a browser, or serve it with any static file server:
 
 ```bash
-# Any of these work:
+# Recommended (local development): docker compose
+docker compose up -d        # serves on http://localhost:8080, no-cache headers, repo internals denied
+docker compose logs -f
+docker compose down
+
+# Or any plain static server:
 npx serve .
 python3 -m http.server
 # Or just open index.html in a browser
 ```
+
+The `docker-compose.yml` + `docker/nginx.conf` setup is **for local development only** — it bind-mounts the repo read-only into `nginx:alpine` on port 8080 with caching disabled, so edits to `index.html` / `app.js` / `config.js` show up on a plain browser reload (no `?v=N` bump needed locally). It is not a deployment artifact.
 
 **Login screen** shows an optional environment dropdown (when multiple environments configured) and a "Sign in with Google" button. No credential fields are displayed.
 

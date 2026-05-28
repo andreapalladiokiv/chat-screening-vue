@@ -1,0 +1,25 @@
+# Local development server for the chat-view frontend.
+#
+# Usage:
+#   docker compose up -d        # start, then open http://localhost:8080
+#   docker compose logs -f      # tail access/error logs
+#   docker compose down         # stop and remove the container
+#
+# The repo is bind-mounted read-only, so edits to index.html / app.js /
+# config.js are picked up on a plain browser reload. No rebuild needed.
+
+services:
+  chat-view:
+    image: nginx:alpine
+    container_name: chat-view
+    ports:
+      - "8080:80"
+    volumes:
+      - .:/usr/share/nginx/html:ro
+      - ./docker/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://localhost/index.html"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
