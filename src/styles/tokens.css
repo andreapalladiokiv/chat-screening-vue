@@ -1,0 +1,36 @@
+/* Design tokens — palette, shadows, radii, z-index.
+ * Ported verbatim from legacy/index.html :root so the Vue rewrite is
+ * visually pixel-parity with the legacy app. Adjust here, not per-component. */
+
+:root {
+  /* Palette */
+  --bg: #f0f2f5;
+  --surface: #fafbfc;
+  --border: #e9edef;
+  --text-primary: #111b21;
+  --text-secondary: #556064;
+  --accent: #00a884;
+  --accent-hover: #008f72;
+  --accent-dark: #075e54;
+  --danger: #dc3545;
+  --danger-light: #ffebee;
+
+  /* Radii */
+  --radius-sm: 4px;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --radius-full: 20px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.12);
+  --shadow-xl: 0 8px 32px rgba(0, 0, 0, 0.15);
+
+  /* Z-index layers */
+  --z-sidebar: 10;
+  --z-dropdown: 100;
+  --z-overlay: 200;
+  --z-modal: 500;
+}

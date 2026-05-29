@@ -6,23 +6,52 @@ This file provides context for AI assistants working in this repository.
 
 **Chat View** is a single-page web application for viewing AI chat conversations stored in a Supabase (PostgreSQL) database. It presents sessions in a WhatsApp-style interface, with per-session and per-message feedback capabilities.
 
-The application is a zero-build-step frontend: open `index.html` in a browser and it works. There are no npm scripts, no bundlers, and no test runner.
+The repo is mid-rewrite. The legacy frontend (vanilla JS / HTML / CSS, zero build) lives in [`legacy/`](legacy/) and continues to serve production. A Vue 3 + Vite + TypeScript replacement is being built at the root per [`docs/architecture/review-2026-05.md`](docs/architecture/review-2026-05.md) — currently at Phase 2 / Milestone 1 (auth shell only). Both versions run side by side via Docker during the cutover.
 
 ## Repository Structure
 
 ```
-chat-view/
-├── index.html                              # Single-page app (HTML + all CSS)
-├── app.js                                  # All application logic (~2600 lines)
-├── config.js                               # Gitignored — Supabase credentials, multi-env config, filter options + optional domain restriction
-├── favicon.svg                             # Eyes emoji favicon
+chat-screening/
+├── index.html                              # Vite entry — loads /src/main.ts
+├── package.json / vite.config.ts /         # Vue 3 + Vite + TypeScript scaffold
+│   tsconfig*.json
+├── .env.example / .env.local               # Vue Supabase config (.env.local gitignored)
+├── src/                                    # Vue rewrite source
+│   ├── main.ts                             # createApp + Pinia + Router mount
+│   ├── App.vue                             # Root: <RouterView /> + auth init + logout watcher
+│   ├── router.ts                           # /login, / routes + requiresAuth guard
+│   ├── routes/                             # Thin top-level route SFCs
+│   │   ├── Login.vue                       # Mounts <LoginPanel />
+│   │   └── App.vue                         # Composition: <TopNav /> + content
+│   ├── components/                         # Reusable UI units
+│   │   ├── LoginPanel.vue                  # Login card + env dropdown + Google sign-in
+│   │   └── TopNav.vue                      # Top bar with env badge + sign-out
+│   ├── stores/
+│   │   └── auth.ts                         # Pinia: environments, user, init, signIn, signOut
+│   ├── api/
+│   │   ├── environments.ts                 # Loads VITE_ENV_* env vars into Environment[]
+│   │   └── supabase.ts                     # createSupabaseClient / getSupabaseClient / clearSupabaseClient
+│   ├── styles/
+│   │   ├── tokens.css                      # Palette / shadows / radii / z-index (ported from legacy)
+│   │   └── base.css                        # Global reset + body font
+│   ├── types/
+│   │   └── environment.ts                  # Environment interface
+│   └── vite-env.d.ts                       # ImportMetaEnv type augmentations for VITE_ENV_*
+├── legacy/                                 # Pre-rewrite vanilla SPA, still serves production
+│   ├── index.html                          # Single-page app (HTML + all CSS)
+│   ├── app.js                              # All application logic (~2600 lines)
+│   ├── config.js                           # Gitignored-by-pattern but historically tracked
+│   └── favicon.svg
 ├── CLAUDE.md                               # AI assistant context (this file)
 ├── FEATURES.md                             # Feature list and todo tracker
 ├── README.md                               # Project overview
 ├── SETUP.md                                # Google OAuth setup guide
-├── docker-compose.yml                      # Local-only: nginx static server on :8080
+├── docker-compose.yml                      # Local: legacy (nginx :8080) + vue (vite :5173)
 ├── docker/
-│   └── nginx.conf                          # Local-only: no-cache + repo-internals deny rules
+│   └── nginx.conf                          # Legacy-side: no-cache + repo-internals deny rules
+├── docs/
+│   └── architecture/
+│       └── review-2026-05.md               # Phase 1 / Phase 2 refactor plan
 └── supabase/
     ├── functions/
     │   ├── chat-feedback/
@@ -57,27 +86,49 @@ chat-view/
 
 ## Running the Application
 
-No build step is needed. Open `index.html` directly in a browser, or serve it with any static file server:
+The repo serves two versions side by side during the rewrite cutover:
 
 ```bash
-# Recommended (local development): docker compose
-docker compose up -d        # serves on http://localhost:8080, no-cache headers, repo internals denied
-docker compose logs -f
-docker compose down
-
-# Or any plain static server:
-npx serve .
-python3 -m http.server
-# Or just open index.html in a browser
+docker compose up -d
+# legacy → http://localhost:8080  (nginx serving legacy/index.html + app.js)
+# vue    → http://localhost:5173  (vite dev server with HMR)
 ```
 
-The `docker-compose.yml` + `docker/nginx.conf` setup is **for local development only** — it bind-mounts the repo read-only into `nginx:alpine` on port 8080 with caching disabled, so edits to `index.html` / `app.js` / `config.js` show up on a plain browser reload (no `?v=N` bump needed locally). It is not a deployment artifact.
+Run only one:
+
+```bash
+docker compose up -d chat-view-legacy
+docker compose up -d chat-view-vue
+docker compose logs -f chat-view-vue
+docker compose down
+docker compose down -v   # also wipe the npm-install named volume
+```
+
+The `docker-compose.yml` is **for local development only**:
+
+- **chat-view-legacy** — `nginx:alpine` on `:8080`. Bind-mounts `./legacy/` read-only and `./docker/nginx.conf`. No-cache headers, so edits to `legacy/*` show up on plain reload.
+- **chat-view-vue** — `node:22-alpine` on `:5173`. Bind-mounts the repo and a named volume `vue-node-modules`. Runs `npm install && npm run dev`. HMR enabled via `CHOKIDAR_USEPOLLING=true`.
+
+Outside Docker you can also run the Vue side directly: `npm install && npm run dev`.
 
 **Login screen** shows an optional environment dropdown (when multiple environments configured) and a "Sign in with Google" button. No credential fields are displayed.
 
-**Credentials must be provided via `config.js`** (gitignored) — the login button will show an error if neither `config.js` nor saved `localStorage` values are present.
+### Vue rewrite — `.env.local`
 
-`config.js` supports two formats:
+The Vue side (root `index.html`) reads Supabase credentials from Vite env vars at build/dev time. Copy `.env.example` → `.env.local` (gitignored) and fill in. Each var is comma-separated, aligned by index across all four:
+
+```
+VITE_ENV_NAMES=Development,Production,Stage
+VITE_ENV_PROJECT_IDS=dev-id,prod-id,stage-id
+VITE_ENV_ANON_KEYS=eyJ...dev,eyJ...prod,eyJ...stage
+VITE_ENV_ALLOWED_DOMAINS=,kiv.dev,kiv.dev   # empty entry = allow all
+```
+
+The auth store (`src/stores/auth.ts`) consumes these via `src/api/environments.ts` and persists the selected env index in `localStorage.sb_selected_env`.
+
+### Legacy — `config.js`
+
+The legacy side (`legacy/index.html`) reads from `legacy/config.js` (historically tracked, gitignored-by-pattern, real values present locally). It supports two formats:
 
 ```js
 // Single-environment format (original, backward compatible)

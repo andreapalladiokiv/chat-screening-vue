@@ -1,2 +1,18 @@
 .idea
 config.js
+
+# Vue / Vite
+node_modules/
+dist/
+dist-ssr/
+*.local
+.env.local
+.env.*.local
+
+# Editors / OS
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
