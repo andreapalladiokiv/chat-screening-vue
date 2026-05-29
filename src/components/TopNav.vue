@@ -3,6 +3,7 @@ import { computed } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { useSessionsStore } from '@/stores/sessions';
 import BurgerMenu from '@/components/BurgerMenu.vue';
+import { currentTimezone, setTimezone } from '@/state/timezone';
 
 defineEmits<{ (e: 'open-filters'): void }>();
 
@@ -12,15 +13,8 @@ const sessions = useSessionsStore();
 const showEnvSwitcher = computed(() => auth.environments.length >= 1);
 const singleEnv = computed(() => auth.environments.length <= 1);
 
-// Placeholder timezone display — picks the browser's tz at load. A real
-// dropdown to switch timezones lands in M3 per review §3.2.3.
-const tzLabel = computed(() => {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-  } catch {
-    return 'UTC';
-  }
-});
+// Reactive — flips when setTimezone() is called from onTzClick.
+const tzLabel = computed(() => currentTimezone.value);
 
 async function onEnvChange(e: Event) {
   const idx = parseInt((e.target as HTMLSelectElement).value, 10);
@@ -34,6 +28,25 @@ async function onRefresh() {
 
 function onSearchInput(e: Event) {
   sessions.setSearchQuery((e.target as HTMLInputElement).value);
+}
+
+function onTzClick() {
+  // Legacy uses window.prompt; the proper dropdown lands in M3 per review §3.2.3.
+  const next = window.prompt(
+    'Enter timezone (IANA, e.g. Europe/Chisinau, America/New_York, UTC):',
+    currentTimezone.value,
+  );
+  if (next === null) return; // cancelled
+  const trimmed = next.trim();
+  if (!trimmed) return;
+  // Validate via Intl — invalid IANA strings throw.
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: trimmed });
+  } catch {
+    window.alert(`"${trimmed}" is not a valid IANA timezone. No change applied.`);
+    return;
+  }
+  setTimezone(trimmed);
 }
 </script>
 
@@ -81,7 +94,7 @@ function onSearchInput(e: Event) {
         <span class="live-dot"></span>Live
       </span>
 
-      <button class="tz-btn" disabled title="Timezone selector lands in M3">
+      <button class="tz-btn" title="Click to change timezone" @click="onTzClick">
         <span>{{ tzLabel }}</span>
       </button>
 

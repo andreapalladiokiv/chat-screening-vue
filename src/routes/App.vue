@@ -4,6 +4,9 @@ import { useRoute, useRouter } from 'vue-router';
 import TopNav from '@/components/TopNav.vue';
 import SessionList from '@/components/SessionList.vue';
 import FilterPopover from '@/components/FilterPopover.vue';
+import ChatView from '@/components/ChatView.vue';
+import DetailSidebar from '@/components/DetailSidebar.vue';
+import FeedbackModal from '@/components/FeedbackModal.vue';
 import { useSessionsStore } from '@/stores/sessions';
 
 const sessions = useSessionsStore();
@@ -12,8 +15,12 @@ const router = useRouter();
 
 // Realtime subscription — lives for the lifetime of the /app route.
 // SessionList itself triggers the initial loadDefault on mount; we just
-// turn on the Live indicator here.
-onMounted(() => sessions.subscribeRealtime());
+// turn on the Live indicator here. We also hydrate the reviewed set
+// from localStorage so the "Reviewed ✓" toggle persists across reloads.
+onMounted(() => {
+  sessions.loadReviewed();
+  sessions.subscribeRealtime();
+});
 onBeforeUnmount(() => sessions.unsubscribeRealtime());
 
 // FilterPopover open state — owned by the route so the popover can render
@@ -66,19 +73,16 @@ watch(
   <div class="shell">
     <TopNav @open-filters="filterOpen = true" />
     <FilterPopover :open="filterOpen" @close="filterOpen = false" />
+    <FeedbackModal />
     <div class="content">
       <SessionList />
       <main class="chat-area">
         <div v-if="!sessions.current" class="chat-empty">
           <p>Select a session from the list to view the conversation.</p>
-          <p class="hint">Chat view, filters, and feedback land in subsequent M2 milestones.</p>
         </div>
-        <div v-else class="chat-placeholder">
-          <h3>{{ sessions.current.conversationId || sessions.current.id }}</h3>
-          <p>{{ sessions.current.count }} messages — first {{ sessions.current.earliest }}, last {{ sessions.current.latest }}</p>
-          <p class="hint">Message rendering arrives in a later M2 sub-milestone. For now this confirms click → selected-id + deep-link wiring.</p>
-        </div>
+        <ChatView v-else />
       </main>
+      <DetailSidebar />
     </div>
   </div>
 </template>
@@ -99,43 +103,22 @@ watch(
 
 .chat-area {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   background: var(--chat-bg);
+  /* WhatsApp-style faint dot pattern — matches legacy .chat-area. */
+  background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23c8c8c8' fill-opacity='0.1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
   overflow: hidden;
 }
 
-.chat-empty,
-.chat-placeholder {
+.chat-empty {
   flex: 1;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
   padding: 40px;
   text-align: center;
   color: var(--text-secondary);
-}
-
-.chat-placeholder h3 {
-  font-size: 16px;
-  color: var(--text-primary);
-  margin-bottom: 12px;
-  word-break: break-all;
-}
-
-.chat-empty p,
-.chat-placeholder p {
-  margin-bottom: 8px;
-}
-
-.hint {
-  margin-top: 12px;
-  padding: 12px 16px;
-  background: var(--surface);
-  border: 1px dashed var(--border);
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-  max-width: 480px;
 }
 </style>

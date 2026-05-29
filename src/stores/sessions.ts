@@ -54,9 +54,37 @@ export const useSessionsStore = defineStore('sessions', () => {
   type ReviewedFilter = 'all' | 'unreviewed' | 'reviewed';
   const sortBy = ref<SortBy>('newest');
   const reviewedFilter = ref<ReviewedFilter>('all');
-  /** Per-project reviewed-session IDs, mirrored to localStorage by a later
-   * sub-milestone (the "Mark Reviewed" button). */
+
+  /** Reviewed-session IDs, mirrored to localStorage under a per-project key
+   * so different environments stay separate. */
   const reviewedIds = ref<Set<string>>(new Set());
+
+  function reviewedKey(): string {
+    const projectId = localStorage.getItem('sb_project_id') || 'default';
+    return `sb_reviewed_${projectId}`;
+  }
+  function loadReviewed(): void {
+    try {
+      const raw = localStorage.getItem(reviewedKey());
+      reviewedIds.value = raw ? new Set(JSON.parse(raw) as string[]) : new Set();
+    } catch {
+      reviewedIds.value = new Set();
+    }
+  }
+  function saveReviewed(): void {
+    try {
+      localStorage.setItem(reviewedKey(), JSON.stringify([...reviewedIds.value]));
+    } catch {
+      // localStorage may be unavailable in private mode; non-fatal.
+    }
+  }
+  function toggleReviewed(id: string): void {
+    const next = new Set(reviewedIds.value);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    reviewedIds.value = next;
+    saveReviewed();
+  }
 
   /** Sessions actually visible in the list. Pipeline:
    *   1. base = search results when active, else the default list
@@ -304,6 +332,8 @@ export const useSessionsStore = defineStore('sessions', () => {
     sortBy,
     reviewedFilter,
     reviewedIds,
+    loadReviewed,
+    toggleReviewed,
     setSearchQuery,
     clearSearch,
     applyFilters,

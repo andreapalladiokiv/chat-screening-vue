@@ -31,6 +31,19 @@ a:hover {
   text-decoration: underline;
 }
 
+/* In-session search highlights — injected by InSessionSearch.vue via DOM
+ * manipulation (no Vue scoping attribute), so styles must be global. */
+mark.search-highlight {
+  background: #fde68a;
+  color: inherit;
+  padding: 0 1px;
+  border-radius: 2px;
+}
+mark.search-highlight.active {
+  background: #f59e0b;
+  color: #fff;
+}
+
 /* Accessibility: respect reduced-motion preference. */
 @media (prefers-reduced-motion: reduce) {
   *,
