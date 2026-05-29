@@ -144,6 +144,32 @@ export const useAuthStore = defineStore('auth', () => {
     handleSignedOut();
   }
 
+  /**
+   * Switch to a different environment: sign out of the current one and start
+   * a fresh OAuth round-trip against the new one. Mirrors legacy handleEnvSwitch.
+   * The browser navigates away on the OAuth call — no UI restore needed.
+   */
+  async function switchEnv(idx: number): Promise<void> {
+    const target = environments.value[idx];
+    if (!target) return;
+
+    selectEnv(idx);
+
+    try {
+      await getSupabaseClient().auth.signOut();
+    } catch {
+      // ignore — may already be signed out
+    }
+    handleSignedOut();
+
+    const db = createSupabaseClient(target);
+    const { error: err } = await db.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: window.location.origin + '/' },
+    });
+    if (err) error.value = `Failed to switch environment: ${err.message}`;
+  }
+
   function handleSignedOut(): void {
     user.value = null;
     clearSupabaseClient();

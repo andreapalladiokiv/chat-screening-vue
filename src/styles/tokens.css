@@ -1,36 +1,92 @@
-/* Design tokens — palette, shadows, radii, z-index.
- * Ported verbatim from legacy/index.html :root so the Vue rewrite is
- * visually pixel-parity with the legacy app. Adjust here, not per-component. */
+/* Chat-screening design tokens.
+ *
+ * Source of truth for the Vue rewrite — every visual decision should resolve
+ * through one of these custom properties. Grouped by purpose, not name.
+ * See docs/architecture/palette.md for the human-readable reference.
+ *
+ * During the cutover the legacy stylesheet (src/styles/legacy.css) carries
+ * an identical :root block verbatim. Once legacy.css is deleted, this file
+ * remains. */
 
 :root {
-  /* Palette */
-  --bg: #f0f2f5;
-  --surface: #fafbfc;
-  --border: #e9edef;
-  --text-primary: #111b21;
-  --text-secondary: #556064;
-  --accent: #00a884;
-  --accent-hover: #008f72;
-  --accent-dark: #075e54;
-  --danger: #dc3545;
-  --danger-light: #ffebee;
+  /* ── Base palette ───────────────────────────────────────────────────── */
+  --bg:             #f0f2f5; /* Main page background — light grey */
+  --surface:        #fafbfc; /* Surfaces, slightly lighter than --bg */
+  --sidebar-bg:     #ffffff; /* Sidebar (white) */
+  --white:          #ffffff; /* Pure white — modals, bubbles */
+  --border:         #e9edef; /* Borders, dividers */
+  --text-primary:   #111b21; /* Primary text */
+  --text-secondary: #556064; /* Secondary text, meta info */
 
-  /* Radii */
-  --radius-sm: 4px;
-  --radius: 8px;
-  --radius-lg: 12px;
-  --radius-full: 20px;
+  /* ── Accent ─────────────────────────────────────────────────────────── */
+  --accent:       #00a884; /* WhatsApp teal — primary accent */
+  --accent-hover: #008f72; /* Hover on accent */
+  --accent-dark:  #075e54; /* Login gradient, links */
+  --danger:       #dc3545; /* Errors, destructive actions */
+  --danger-light: #fde8e8; /* Light error backgrounds */
 
-  /* Shadows */
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
-  --shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.1);
-  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.12);
-  --shadow-xl: 0 8px 32px rgba(0, 0, 0, 0.15);
+  /* ── Messages ───────────────────────────────────────────────────────── */
+  --chat-bg:      #e5ddd5; /* Chat area background — WhatsApp light tan */
+  --human-bubble: #ffffff; /* Human message bubble — white */
+  --ai-bubble:    #dcf8c6; /* AI bubble — pale green */
+  --tool-bg:      #fff3cd; /* Tool message background */
+  --tool-text:    #856404; /* Tool message text */
+  --system-color: #607080; /* System message colour */
 
-  /* Z-index layers */
-  --z-sidebar: 10;
-  --z-dropdown: 100;
-  --z-overlay: 200;
-  --z-modal: 500;
+  /* ── Badges — categories / AI metadata ──────────────────────────────── */
+  --badge-bg:            #e1f0da; /* Default badge (categories, request_types) */
+  --badge-text:          #3b7a28;
+  --badge-verified-bg:   #def7ec; /* verified */
+  --badge-verified-text: #03543f;
+  --badge-end-bg:        #fde8e8; /* end-conversation */
+  --badge-end-text:      #c53030;
+  --badge-reviewed-bg:   #e0f2fe; /* reviewed */
+  --badge-reviewed-text: #0369a1;
+
+  /* ── Badges — visitor settings ──────────────────────────────────────── */
+  --badge-project-bg:    #e0e7ff; /* project */
+  --badge-project-text:  #3730a3;
+  --badge-visitor-bg:    #fce7f3; /* visitor type */
+  --badge-visitor-text:  #9d174d;
+  --badge-language-bg:   #ecfccb; /* language */
+  --badge-language-text: #3f6212;
+  --badge-entity-bg:     #f3e8ff; /* lead / case / booking */
+  --badge-entity-text:   #6b21a8;
+  --badge-whatsapp-bg:   #d1fae5; /* whatsapp */
+  --badge-whatsapp-text: #065f46;
+
+  /* ── Pills — message-type counts ────────────────────────────────────── */
+  /* AI pill reuses --badge-bg / --badge-text.
+   * Tool pill reuses --tool-bg / --tool-text.
+   * System pill reuses --bg / --text-secondary. */
+  --pill-human-bg:   #eef1f4;
+  --pill-human-text: #3d5166;
+
+  /* ── Env switcher ───────────────────────────────────────────────────── */
+  --env-bg:     #e8eaf6;
+  --env-text:   #3949ab;
+  --env-border: #c5cae9;
+
+  /* ── Admin ──────────────────────────────────────────────────────────── */
+  --admin-badge-bg:   #fef3c7;
+  --admin-badge-text: #92400e;
+
+  /* ── Radii ──────────────────────────────────────────────────────────── */
+  --radius-sm:   4px;  /* Inputs, small buttons */
+  --radius:      8px;  /* Default */
+  --radius-lg:   12px; /* Cards, modals */
+  --radius-full: 20px; /* Pills, capsules */
+
+  /* ── Shadows ────────────────────────────────────────────────────────── */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);  /* Cards, top nav */
+  --shadow:    0 1px 3px rgba(0, 0, 0, 0.08);  /* Alias of --sm */
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.1);   /* Dropdowns, popovers */
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.12); /* Modals */
+  --shadow-xl: 0 8px 32px rgba(0, 0, 0, 0.15); /* Login card, large modals */
+
+  /* ── Z-index layers ─────────────────────────────────────────────────── */
+  --z-sidebar:  10;  /* Sidebar above content */
+  --z-dropdown: 100; /* Burger / env / filter dropdowns */
+  --z-overlay:  200; /* Loading backdrop */
+  --z-modal:    500; /* Feedback / admin / users modals */
 }

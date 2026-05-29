@@ -1,5 +1,9 @@
+/* Design tokens — single source of truth for the Vue rewrite.
+ * See docs/architecture/palette.md for the human-readable reference. */
 @import './tokens.css';
 
+/* Universal reset — matches legacy's "* { margin: 0; padding: 0; box-sizing: border-box }".
+ * Vue components rely on this baseline; do not weaken without auditing. */
 * {
   margin: 0;
   padding: 0;
@@ -25,4 +29,15 @@ a {
 }
 a:hover {
   text-decoration: underline;
+}
+
+/* Accessibility: respect reduced-motion preference. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
