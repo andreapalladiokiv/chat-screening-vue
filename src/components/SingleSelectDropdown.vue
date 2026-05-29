@@ -75,17 +75,17 @@ onBeforeUnmount(() => {
 .dd-filter {
   position: relative;
   width: 100%;
-  min-width: 110px;
+  min-width: 6.875rem;
 }
 .dd-trigger {
   width: 100%;
   text-align: left;
-  padding: 6px 8px;
+  padding: 0.375rem 0.5rem;
   border: 1px solid var(--border);
   border-radius: 4px;
   background: #fff;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-primary);
   outline: none;
   white-space: nowrap;
@@ -95,8 +95,8 @@ onBeforeUnmount(() => {
    * visually uniform. */
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5' viewBox='0 0 8 5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%23556064'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 8px center;
-  padding-right: 24px;
+  background-position: right 0.5rem center;
+  padding-right: 1.5rem;
 }
 .dd-trigger:hover,
 .dd-trigger.active {
@@ -109,7 +109,7 @@ onBeforeUnmount(() => {
   top: calc(100% + 2px);
   left: 0;
   min-width: 100%;
-  max-height: 160px;
+  max-height: 10rem;
   overflow-y: auto;
   background: #fff;
   border: 1px solid var(--border);
@@ -124,11 +124,11 @@ onBeforeUnmount(() => {
 .dd-item {
   display: block;
   width: 100%;
-  padding: 5px 10px;
+  padding: 0.3125rem 0.625rem;
   border: none;
   background: none;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-primary);
   text-align: left;
   white-space: nowrap;

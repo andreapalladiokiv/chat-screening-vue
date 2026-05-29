@@ -82,17 +82,17 @@ onBeforeUnmount(() => {
 .dd-filter {
   position: relative;
   width: 100%;
-  min-width: 130px;
+  min-width: 8.125rem;
 }
 .dd-trigger {
   width: 100%;
   text-align: left;
-  padding: 6px 8px;
+  padding: 0.375rem 0.5rem;
   border: 1px solid var(--border);
   border-radius: 4px;
   background: #fff;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-primary);
   outline: none;
   white-space: nowrap;
@@ -110,7 +110,7 @@ onBeforeUnmount(() => {
   top: calc(100% + 2px);
   left: 0;
   min-width: 100%;
-  max-height: 160px;
+  max-height: 10rem;
   overflow-y: auto;
   background: #fff;
   border: 1px solid var(--border);
@@ -125,10 +125,10 @@ onBeforeUnmount(() => {
 .dd-panel label {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 5px 10px;
+  gap: 0.5rem;
+  padding: 0.3125rem 0.625rem;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-primary);
   white-space: nowrap;
   min-width: auto;

@@ -27,6 +27,19 @@ export const useAuthStore = defineStore('auth', () => {
   );
   const isAuthenticated = computed(() => user.value !== null);
 
+  /** Display name preference: user_metadata.full_name → user_metadata.name → email.
+   * Used in feedback "Submitted by" and could replace TopNav's raw email later. */
+  const displayName = computed<string>(() => {
+    const u = user.value;
+    if (!u) return 'Unknown';
+    const meta = (u.user_metadata ?? {}) as Record<string, unknown>;
+    const fromMeta =
+      (typeof meta.full_name === 'string' && meta.full_name) ||
+      (typeof meta.name === 'string' && meta.name) ||
+      '';
+    return fromMeta || u.email || 'Unknown';
+  });
+
   function selectEnv(idx: number) {
     selectedEnvIdx.value = idx;
     setSelectedEnvIndex(idx);
@@ -183,6 +196,7 @@ export const useAuthStore = defineStore('auth', () => {
     selectedEnv,
     user,
     isAuthenticated,
+    displayName,
     initialising,
     error,
     selectEnv,

@@ -2,6 +2,7 @@
 import { computed, nextTick, ref, watch } from 'vue';
 import { useSessionsStore } from '@/stores/sessions';
 import { useMessagesStore } from '@/stores/messages';
+import { Selectors } from '@/constants/selectors';
 import MessageBubble from '@/components/MessageBubble.vue';
 
 const sessions = useSessionsStore();
@@ -61,10 +62,10 @@ watch(
     await nextTick();
     const selector =
       target === 'first-ai'
-        ? '.message-wrapper.ai'
+        ? Selectors.messageWrapper.ai
         : target === 'first-tool'
-          ? '.message-wrapper.tool'
-          : '.message-wrapper:last-of-type';
+          ? Selectors.messageWrapper.tool
+          : Selectors.messageWrapper.last;
     const el = containerRef.value.querySelector(selector) as HTMLElement | null;
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     messages.clearJump();
@@ -118,21 +119,21 @@ watch(
 }
 
 .chat-header {
-  padding: 10px 16px;
+  padding: 0.625rem 1rem;
   background: var(--sidebar-bg);
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0.5rem;
   min-width: 0;
   flex-shrink: 0;
-  min-height: 50px;
+  min-height: 3.125rem;
 }
 
 .chat-session-controls {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0.5rem;
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -141,13 +142,13 @@ watch(
 .chat-header-right {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0.5rem;
   flex-shrink: 0;
   margin-left: auto;
 }
 
 .chat-header h3 {
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 600;
   color: var(--text-primary);
   overflow: hidden;
@@ -168,10 +169,10 @@ watch(
 .messages-container {
   flex: 1;
   overflow-y: auto;
-  padding: 20px;
+  padding: 1.25rem;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 0.25rem;
 }
 
 .chat-state {
@@ -180,8 +181,8 @@ watch(
   align-items: center;
   justify-content: center;
   color: var(--text-secondary);
-  font-size: 13px;
-  padding: 40px;
+  font-size: 0.8125rem;
+  padding: 2.5rem;
   text-align: center;
 }
 .chat-state.error {

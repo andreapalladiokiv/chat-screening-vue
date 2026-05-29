@@ -1,6 +1,7 @@
+import { StorageKeys } from '@/constants/storage';
 import type { Environment } from '@/types/environment';
 
-const STORAGE_SELECTED_ENV = 'sb_selected_env';
+const STORAGE_SELECTED_ENV = StorageKeys.selectedEnv;
 
 /**
  * Build the environments list from Vite env vars.

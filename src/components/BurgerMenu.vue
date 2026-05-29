@@ -71,8 +71,8 @@ const isAdmin = false;
   background: none;
   border: none;
   cursor: pointer;
-  padding: 4px 6px;
-  font-size: 22px;
+  padding: 0.25rem 0.375rem;
+  font-size: 1.375rem;
   line-height: 1;
   color: var(--text-primary);
   border-radius: 4px;
@@ -84,9 +84,9 @@ const isAdmin = false;
 .burger-dropdown {
   display: none;
   position: absolute;
-  top: calc(100% + 4px);
-  left: 12px;
-  min-width: 220px;
+  top: calc(100% + 0.25rem);
+  left: 0.75rem;
+  min-width: 13.75rem;
   background: rgba(255, 255, 255, 0.96);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
@@ -101,11 +101,11 @@ const isAdmin = false;
 }
 
 .burger-user-info {
-  padding: 12px 14px;
+  padding: 0.75rem 0.875rem;
   border-bottom: 1px solid var(--border);
 }
 .burger-user-email {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   color: var(--text-primary);
   overflow: hidden;
@@ -114,10 +114,10 @@ const isAdmin = false;
 }
 .burger-user-role {
   display: inline-block;
-  margin-top: 4px;
-  font-size: 11px;
+  margin-top: 0.25rem;
+  font-size: 0.6875rem;
   font-weight: 600;
-  padding: 2px 8px;
+  padding: 0.125rem 0.5rem;
   border-radius: 10px;
   background: var(--badge-bg);
   color: var(--badge-text);
@@ -130,13 +130,13 @@ const isAdmin = false;
 .burger-menu-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0.5rem;
   width: 100%;
-  padding: 10px 14px;
+  padding: 0.625rem 0.875rem;
   background: none;
   border: none;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-primary);
   text-align: left;
 }
@@ -144,9 +144,9 @@ const isAdmin = false;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
+  width: 1.25rem;
   flex-shrink: 0;
-  font-size: 15px;
+  font-size: 0.9375rem;
 }
 .burger-menu-item:hover:not(:disabled) {
   background: var(--bg);

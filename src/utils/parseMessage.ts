@@ -1,3 +1,4 @@
+import { extractAiOutput } from '@/utils/extractAiOutput';
 import type {
   AiMeta,
   ChatMessageRow,
@@ -88,16 +89,9 @@ export function parseMessage(row: ChatMessageRow): ParsedMessage {
       }
     }
 
-    // Wrapped (content.output.X) vs flat (content.X).
-    let out: Record<string, unknown> | null = null;
-    if (content && typeof content === 'object') {
-      const c = content as Record<string, unknown>;
-      if (c.output && typeof c.output === 'object') {
-        out = c.output as Record<string, unknown>;
-      } else if (typeof c.text !== 'undefined') {
-        out = c;
-      }
-    }
+    // Wrapped (content.output.X) vs flat (content.X). Single source of
+    // truth in utils/extractAiOutput.ts.
+    const out = extractAiOutput(content);
 
     if (out) {
       const meta: AiMeta = {

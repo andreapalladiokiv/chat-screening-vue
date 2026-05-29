@@ -3,6 +3,7 @@ import { computed } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { useSessionsStore } from '@/stores/sessions';
 import BurgerMenu from '@/components/BurgerMenu.vue';
+import SingleSelectDropdown from '@/components/SingleSelectDropdown.vue';
 import { currentTimezone, setTimezone } from '@/state/timezone';
 
 defineEmits<{ (e: 'open-filters'): void }>();
@@ -13,14 +14,19 @@ const sessions = useSessionsStore();
 const showEnvSwitcher = computed(() => auth.environments.length >= 1);
 const singleEnv = computed(() => auth.environments.length <= 1);
 
-// Reactive — flips when setTimezone() is called from onTzClick.
-const tzLabel = computed(() => currentTimezone.value);
-
-async function onEnvChange(e: Event) {
-  const idx = parseInt((e.target as HTMLSelectElement).value, 10);
-  if (idx === auth.selectedEnvIdx) return;
+// SingleSelectDropdown carries values as strings — encode/decode the index.
+const envOptions = computed(() =>
+  auth.environments.map((env, i) => ({ value: String(i), label: env.name })),
+);
+const selectedEnvValue = computed(() => String(auth.selectedEnvIdx));
+async function onEnvPick(value: string) {
+  const idx = parseInt(value, 10);
+  if (isNaN(idx) || idx === auth.selectedEnvIdx) return;
   await auth.switchEnv(idx);
 }
+
+// Reactive — flips when setTimezone() is called from onTzClick.
+const tzLabel = computed(() => currentTimezone.value);
 
 async function onRefresh() {
   await sessions.loadDefault();
@@ -80,15 +86,13 @@ function onTzClick() {
     </div>
 
     <div class="top-nav-right">
-      <select
-        v-if="showEnvSwitcher"
-        class="env-switcher active"
-        :class="{ single: singleEnv }"
-        :value="auth.selectedEnvIdx"
-        @change="onEnvChange"
-      >
-        <option v-for="(env, i) in auth.environments" :key="i" :value="i">{{ env.name }}</option>
-      </select>
+      <div v-if="showEnvSwitcher" class="env-switcher" :class="{ single: singleEnv }">
+        <SingleSelectDropdown
+          :model-value="selectedEnvValue"
+          :options="envOptions"
+          @update:model-value="onEnvPick"
+        />
+      </div>
 
       <span class="live-badge" :class="{ active: sessions.isLive }" aria-hidden="true">
         <span class="live-dot"></span>Live
@@ -107,8 +111,8 @@ function onTzClick() {
 .top-nav {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 8px 16px;
+  gap: 0.75rem;
+  padding: 0.5rem 1rem;
   background: var(--sidebar-bg);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
@@ -117,30 +121,30 @@ function onTzClick() {
 .top-nav-left {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0.5rem;
   position: relative;
 }
 
 .top-nav-right {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0.5rem;
   margin-left: auto;
 }
 
 .search-box {
   flex: 1;
-  max-width: 320px;
+  max-width: 20rem;
   padding: 0;
   border: none;
 }
 .search-box input {
   width: 100%;
-  padding: 7px 14px;
+  padding: 0.4375rem 0.875rem;
   border: 1px solid var(--border);
-  border-radius: 20px;
+  border-radius: 1.25rem;
   background: var(--bg);
-  font-size: 13px;
+  font-size: 0.8125rem;
   outline: none;
 }
 .search-box input:focus {
@@ -159,12 +163,12 @@ function onTzClick() {
 .filter-icon-btn {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 5px 10px;
+  gap: 0.25rem;
+  padding: 0.3125rem 0.625rem;
   background: none;
   border: 1px solid var(--border);
   border-radius: var(--radius-full);
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-secondary);
   cursor: pointer;
   white-space: nowrap;
@@ -188,62 +192,60 @@ function onTzClick() {
   cursor: not-allowed;
 }
 .filter-icon-btn svg {
-  width: 14px;
-  height: 14px;
+  width: 0.875rem;
+  height: 0.875rem;
   flex-shrink: 0;
 }
 
-.env-switcher {
-  display: none;
-  font-size: 10px;
+/* Env switcher styled like its neighbours (.tz-btn / .disconnect-btn):
+ * the same secondary-text colour, --radius-full pill shape, accent hover.
+ * Single-env mode neutralises into a static badge. */
+.env-switcher :deep(.dd-filter) {
+  min-width: 0;
+}
+.env-switcher :deep(.dd-trigger) {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  padding: 0.125rem 1.5rem 0.125rem 0.5rem;
+  font-size: 0.625rem;
   font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 10px;
-  background: var(--env-bg);
-  color: var(--env-text);
-  border: 1px solid var(--env-border);
-  outline: none;
-  cursor: pointer;
+  color: var(--text-secondary);
   white-space: nowrap;
-  max-width: 120px;
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5' viewBox='0 0 8 5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%233949ab'/%3E%3C/svg%3E");
+  max-width: 7.5rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5' viewBox='0 0 8 5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%23556064'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 6px center;
-  padding-right: 18px;
+  background-position: right 0.5rem center;
 }
-.env-switcher.active {
-  display: inline-block;
+.env-switcher :deep(.dd-trigger:hover),
+.env-switcher :deep(.dd-trigger.active) {
+  border-color: var(--accent);
+  color: var(--accent);
 }
-.env-switcher:hover {
-  border-color: var(--env-text);
-}
-.env-switcher.single {
+.env-switcher.single :deep(.dd-trigger) {
   pointer-events: none;
   background-image: none;
-  padding-right: 8px;
+  padding-right: 0.5rem;
 }
 
 .live-badge {
   display: none;
   align-items: center;
-  gap: 4px;
-  font-size: 11px;
+  gap: 0.25rem;
+  font-size: 0.6875rem;
   font-weight: 600;
   color: var(--accent);
-  padding: 3px 8px;
+  padding: 0.1875rem 0.5rem;
   border: 1px solid var(--accent);
-  border-radius: 10px;
+  border-radius: 0.625rem;
   white-space: nowrap;
 }
 .live-badge.active {
   display: flex;
 }
 .live-dot {
-  width: 6px;
-  height: 6px;
+  width: 0.375rem;
+  height: 0.375rem;
   background: var(--accent);
   border-radius: 50%;
   animation: live-pulse 1.5s ease-in-out infinite;
@@ -258,8 +260,8 @@ function onTzClick() {
   background: none;
   border: 1px solid var(--border);
   border-radius: var(--radius-full);
-  padding: 2px 8px;
-  font-size: 10px;
+  padding: 0.125rem 0.5rem;
+  font-size: 0.625rem;
   font-weight: 600;
   color: var(--text-secondary);
   cursor: pointer;
@@ -278,8 +280,8 @@ function onTzClick() {
   background: none;
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 5px 10px;
-  font-size: 12px;
+  padding: 0.3125rem 0.625rem;
+  font-size: 0.75rem;
   color: var(--text-secondary);
   cursor: pointer;
   white-space: nowrap;

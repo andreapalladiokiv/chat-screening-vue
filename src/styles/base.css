@@ -10,6 +10,14 @@
   box-sizing: border-box;
 }
 
+/* Root font-size scales gently with viewport so spacing/typography track
+ * the monitor size. clamp(14px → ~18px) across 1024-2560 wide screens.
+ * Mobile is out of scope — the lower bound is just a safety floor.
+ * Every `Xrem` in the app derives from this value. */
+html {
+  font-size: clamp(14px, 12px + 0.25vw, 18px);
+}
+
 html,
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, sans-serif;

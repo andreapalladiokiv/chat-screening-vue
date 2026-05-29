@@ -118,7 +118,7 @@ watch(
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 40px;
+  padding: 2.5rem;
   text-align: center;
   color: var(--text-secondary);
 }

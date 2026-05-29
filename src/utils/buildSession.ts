@@ -1,3 +1,4 @@
+import { parseAndExtractAiOutput } from '@/utils/extractAiOutput';
 import type { ChatMessageRow } from '@/types/message';
 import type { Session, TypeCounts } from '@/types/session';
 
@@ -44,16 +45,7 @@ export function buildSessionFromMessages(sessionId: string, rows: ChatMessageRow
     }
 
     if (type === 'ai' && toolCalls.length === 0) {
-      let content: unknown = msg.content;
-      if (typeof content === 'string') {
-        try { content = JSON.parse(content); } catch { content = null; }
-      }
-      let out: Record<string, unknown> | null = null;
-      if (content && typeof content === 'object') {
-        const c = content as Record<string, unknown>;
-        if (c.output && typeof c.output === 'object') out = c.output as Record<string, unknown>;
-        else if (typeof c.text !== 'undefined') out = c;
-      }
+      const out = parseAndExtractAiOutput(msg.content);
       if (out) {
         if (typeof out.request_category === 'string') categorySet.add(out.request_category);
         if (typeof out.request_type === 'string') requestTypeSet.add(out.request_type);

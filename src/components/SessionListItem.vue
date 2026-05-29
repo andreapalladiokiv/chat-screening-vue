@@ -1,7 +1,10 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed } from 'vue';
 import type { Session } from '@/types/session';
 import { formatSessionMeta } from '@/utils/formatDate';
+import { buildTypePills } from '@/utils/typePills';
+import { hasEnrichment } from '@/utils/sessionEnrichment';
+import { useClipboard } from '@/composables/useClipboard';
 
 const props = defineProps<{
   session: Session;
@@ -14,41 +17,13 @@ defineEmits<{
 
 const displayId = computed(() => props.session.conversationId || props.session.id);
 const metaLine = computed(() => formatSessionMeta(props.session.count, props.session.latest));
+const pills = computed(() => buildTypePills(props.session.typeCounts));
+const hasVisitorEnrichment = computed(() => hasEnrichment(props.session));
 
-const pills = computed(() => {
-  const tc = props.session.typeCounts;
-  const parts: { kind: 'human' | 'ai' | 'tool' | 'system'; n: number; label: string }[] = [];
-  if (tc.human) parts.push({ kind: 'human', n: tc.human, label: 'human' });
-  if (tc.ai) parts.push({ kind: 'ai', n: tc.ai, label: 'ai' });
-  if (tc.tool) parts.push({ kind: 'tool', n: tc.tool, label: 'tool' });
-  if (tc.system) parts.push({ kind: 'system', n: tc.system, label: 'sys' });
-  return parts;
-});
-
-const hasVisitorEnrichment = computed(() =>
-  !!(
-    props.session.project ||
-    props.session.visitorType ||
-    props.session.language ||
-    props.session.isWhatsapp ||
-    props.session.validation ||
-    props.session.hasLead ||
-    props.session.hasCase ||
-    props.session.hasBooking ||
-    props.session.conversationId
-  ),
-);
-
-const justCopied = ref(false);
-async function copyId(e: Event) {
+const { justCopied, copy } = useClipboard();
+function copyId(e: Event) {
   e.stopPropagation();
-  try {
-    await navigator.clipboard.writeText(props.session.id);
-    justCopied.value = true;
-    setTimeout(() => (justCopied.value = false), 1200);
-  } catch {
-    // older browsers / missing clipboard permission
-  }
+  copy(props.session.id);
 }
 </script>
 
@@ -89,7 +64,7 @@ async function copyId(e: Event) {
 
 <style scoped>
 .session-item {
-  padding: 14px 10px;
+  padding: 0.875rem 0.625rem;
   border-bottom: 1px solid var(--border);
   cursor: pointer;
   transition: background 0.15s;
@@ -103,20 +78,20 @@ async function copyId(e: Event) {
 }
 
 .session-id {
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 0.25rem;
 }
 
 .session-id-copy-btn {
   background: none;
   border: none;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
   cursor: pointer;
   padding: 1px 3px;
@@ -138,7 +113,7 @@ async function copyId(e: Event) {
 }
 
 .session-meta {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
   margin-top: 2px;
 }
@@ -146,14 +121,14 @@ async function copyId(e: Event) {
 .type-counts {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 4px;
+  gap: 0.25rem;
+  margin-top: 0.25rem;
 }
 .type-pill {
   display: inline-block;
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 600;
-  padding: 1px 6px;
+  padding: 1px 0.375rem;
   border-radius: 10px;
 }
 .type-pill.human {
@@ -181,9 +156,9 @@ async function copyId(e: Event) {
 }
 .badge {
   display: inline-block;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 500;
-  padding: 2px 8px;
+  padding: 0.125rem 0.5rem;
   border-radius: var(--radius-lg);
   background: var(--badge-bg);
   color: var(--badge-text);

@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
+import SingleSelectDropdown from '@/components/SingleSelectDropdown.vue';
 
 const auth = useAuthStore();
 const router = useRouter();
@@ -11,9 +12,13 @@ const redirecting = ref(false);
 const showEnvDropdown = computed(() => auth.environments.length > 1);
 const noEnvs = computed(() => auth.environments.length === 0);
 
-function onEnvChange(e: Event) {
-  const idx = parseInt((e.target as HTMLSelectElement).value, 10);
-  auth.selectEnv(idx);
+const envOptions = computed(() =>
+  auth.environments.map((env, i) => ({ value: String(i), label: env.name })),
+);
+const selectedEnvValue = computed(() => String(auth.selectedEnvIdx));
+function onEnvPick(value: string) {
+  const idx = parseInt(value, 10);
+  if (!isNaN(idx)) auth.selectEnv(idx);
 }
 
 async function onSignIn() {
@@ -43,10 +48,12 @@ async function onSignIn() {
       </div>
 
       <div v-if="showEnvDropdown" class="env-selector">
-        <label for="env-select">Environment</label>
-        <select id="env-select" :value="auth.selectedEnvIdx" @change="onEnvChange">
-          <option v-for="(env, i) in auth.environments" :key="i" :value="i">{{ env.name }}</option>
-        </select>
+        <label>Environment</label>
+        <SingleSelectDropdown
+          :model-value="selectedEnvValue"
+          :options="envOptions"
+          @update:model-value="onEnvPick"
+        />
       </div>
 
       <button
@@ -82,67 +89,59 @@ async function onSignIn() {
 
 .login-card {
   background: #fff;
-  padding: 40px;
+  padding: 2.5rem;
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-xl);
-  width: 400px;
+  width: 25rem;
   max-width: 90vw;
 }
 
 .login-card h1 {
-  font-size: 24px;
-  margin-bottom: 8px;
+  font-size: 1.5rem;
+  margin-bottom: 0.5rem;
   color: var(--text-primary);
 }
 
 .login-card p {
   color: var(--text-secondary);
-  margin-bottom: 24px;
-  font-size: 14px;
+  margin-bottom: 1.5rem;
+  font-size: 0.875rem;
 }
 
 .env-selector {
-  margin-bottom: 20px;
+  margin-bottom: 1.25rem;
 }
 
 .env-selector label {
   display: block;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   color: var(--text-secondary);
-  margin-bottom: 6px;
+  margin-bottom: 0.375rem;
 }
 
-.env-selector select {
-  width: 100%;
-  padding: 10px 14px;
-  border: 1px solid var(--border);
+/* Scale the SingleSelectDropdown trigger up to match the login card's
+ * larger inputs. Same approach as FeedbackModal — the component's base
+ * targets the denser filter popover. */
+.env-selector :deep(.dd-trigger) {
+  padding: 0.625rem 0.875rem;
+  padding-right: 2.25rem;
+  font-size: 0.875rem;
   border-radius: var(--radius);
-  font-size: 14px;
-  color: var(--text-primary);
-  background-color: #fff;
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23667781' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 12px center;
-  padding-right: 36px;
-  outline: none;
-  cursor: pointer;
-  transition: border-color 0.2s;
 }
-
-.env-selector select:focus {
-  border-color: var(--accent);
+.env-selector :deep(.dd-item) {
+  padding: 0.5rem 0.875rem;
+  font-size: 0.875rem;
 }
 
 .btn {
   width: 100%;
-  padding: 12px;
+  padding: 0.75rem;
   background: var(--accent);
   color: #fff;
   border: none;
   border-radius: var(--radius);
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 600;
   cursor: pointer;
   transition: background 0.2s;
@@ -161,7 +160,7 @@ async function onSignIn() {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 0.625rem;
   background: #fff;
   color: #3c4043;
   border: 1px solid var(--border);
@@ -175,9 +174,9 @@ async function onSignIn() {
 
 .login-error {
   color: var(--danger);
-  font-size: 13px;
+  font-size: 0.8125rem;
   text-align: center;
-  margin-top: 12px;
+  margin-top: 0.75rem;
 }
 
 .login-error.visible {

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
 import { useMessagesStore } from '@/stores/messages';
+import { Selectors } from '@/constants/selectors';
 
 const messages = useMessagesStore();
 
@@ -16,7 +17,7 @@ function escapeRegex(s: string): string {
 
 /** Remove all <mark.search-highlight> wrappers, restoring original text nodes. */
 function clearHighlights(container: HTMLElement) {
-  container.querySelectorAll('mark.search-highlight').forEach((m) => {
+  container.querySelectorAll(Selectors.searchHighlight).forEach((m) => {
     const parent = m.parentNode;
     if (!parent) return;
     parent.replaceChild(document.createTextNode(m.textContent ?? ''), m);
@@ -34,7 +35,7 @@ function performSearch(container: HTMLElement, q: string) {
     return;
   }
   const regex = new RegExp(escapeRegex(q), 'gi');
-  const targets = container.querySelectorAll<HTMLElement>('.message-text, .tool-details pre');
+  const targets = container.querySelectorAll<HTMLElement>(Selectors.searchableText);
 
   targets.forEach((el) => {
     const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
@@ -63,7 +64,7 @@ function performSearch(container: HTMLElement, q: string) {
     }
   });
 
-  matches = Array.from(container.querySelectorAll<HTMLElement>('mark.search-highlight'));
+  matches = Array.from(container.querySelectorAll<HTMLElement>(Selectors.searchHighlight));
   countLabel.value = matches.length ? `0 / ${matches.length}` : 'No results';
   if (matches.length) navigate(1);
 }
@@ -125,17 +126,17 @@ watch(
 .session-search-bar {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 0.25rem;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 5px 8px;
+  padding: 0.3125rem 0.5rem;
 }
 .session-search-bar input {
   flex: 1;
   border: none;
   outline: none;
-  font-size: 12px;
+  font-size: 0.75rem;
   background: transparent;
   color: var(--text-primary);
   min-width: 0;
@@ -144,7 +145,7 @@ watch(
   color: var(--text-secondary);
 }
 .session-search-count {
-  font-size: 10px;
+  font-size: 0.625rem;
   color: var(--text-secondary);
   white-space: nowrap;
 }
@@ -157,7 +158,7 @@ watch(
   background: none;
   border: none;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
   padding: 1px 3px;
   border-radius: var(--radius-sm);

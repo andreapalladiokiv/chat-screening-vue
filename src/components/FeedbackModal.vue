@@ -2,6 +2,8 @@
 import { computed, ref, watch } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { useFeedbackStore } from '@/stores/feedback';
+import { formatTime } from '@/utils/formatDate';
+import SingleSelectDropdown from '@/components/SingleSelectDropdown.vue';
 
 const auth = useAuthStore();
 const feedback = useFeedbackStore();
@@ -9,22 +11,30 @@ const feedback = useFeedbackStore();
 const category = ref('');
 const comment = ref('');
 
+const categoryOptions = [
+  { value: '', label: 'Select a category...' },
+  { value: 'bug', label: 'Bug / Incorrect response' },
+  { value: 'suggestion', label: 'Suggestion / Improvement' },
+  { value: 'praise', label: 'Praise / Good response' },
+  { value: 'other', label: 'Other' },
+];
+
 const subtitle = computed(() => {
   const m = feedback.meta;
   if (!m) return '';
   if (m.type === 'chat') {
     return `About chat session: ${(m.session_id ?? '').substring(0, 24)}…`;
   }
-  return `About ${m.message_type ?? 'message'}${
-    m.message_timestamp ? ` at ${m.message_timestamp}` : ''
-  }`;
+  // Legacy formats the timestamp via formatTime — "Nov 5, 14:30:45 PM".
+  const when = m.message_timestamp ? ` at ${formatTime(m.message_timestamp)}` : '';
+  return `About ${m.message_type ?? 'message'} message${when}`;
 });
 
 const submitDisabled = computed(
   () => feedback.submitting || !category.value || !comment.value.trim(),
 );
 
-const userLabel = computed(() => auth.user?.email ?? 'Unknown');
+const userLabel = computed(() => auth.displayName);
 const envName = computed(() => auth.selectedEnv?.name ?? 'Default');
 
 // Reset form when modal opens.
@@ -78,14 +88,10 @@ async function onSubmit() {
       <div class="fb-subtitle">{{ subtitle }}</div>
       <div class="fb-user">Submitted by: <strong>{{ userLabel }}</strong></div>
 
-      <label for="fb-category">Category</label>
-      <select id="fb-category" v-model="category">
-        <option value="">Select a category...</option>
-        <option value="bug">Bug / Incorrect response</option>
-        <option value="suggestion">Suggestion / Improvement</option>
-        <option value="praise">Praise / Good response</option>
-        <option value="other">Other</option>
-      </select>
+      <label>Category</label>
+      <div class="fb-category">
+        <SingleSelectDropdown v-model="category" :options="categoryOptions" />
+      </div>
 
       <label for="fb-comment">Comment</label>
       <textarea id="fb-comment" v-model="comment" placeholder="Describe your feedback..."></textarea>
@@ -120,64 +126,79 @@ async function onSubmit() {
   background: #fff;
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-xl);
-  width: 440px;
+  width: 27.5rem;
   max-width: 92vw;
   max-height: 90vh;
   overflow-y: auto;
-  padding: 28px;
+  padding: 1.75rem;
 }
 
 .feedback-modal h3 {
-  font-size: 18px;
-  margin-bottom: 4px;
+  font-size: 1.125rem;
+  margin-bottom: 0.25rem;
 }
 .fb-subtitle {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
-  margin-bottom: 6px;
+  margin-bottom: 1.125rem;
 }
 .fb-user {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
-  margin-bottom: 12px;
+  margin-bottom: 0.75rem;
 }
 
 .feedback-modal label {
   display: block;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   color: var(--text-secondary);
-  margin-bottom: 4px;
+  margin-bottom: 0.25rem;
 }
-.feedback-modal select,
+.fb-category {
+  /* Same vertical rhythm as the textarea — gives the SingleSelectDropdown
+   * the same gap to the next label that the textarea has. */
+  margin-bottom: 0.875rem;
+}
+
+/* Scale the dropdown trigger up to match the modal's larger inputs
+ * (textarea is 14px / 8-10 padding). The component's base size targets
+ * the denser filter popover. */
+.fb-category :deep(.dd-trigger) {
+  padding: 0.5rem 0.625rem;
+  padding-right: 1.75rem;
+  font-size: 0.875rem;
+}
+.fb-category :deep(.dd-item) {
+  padding: 0.4375rem 0.75rem;
+  font-size: 0.875rem;
+}
+
 .feedback-modal textarea {
   width: 100%;
-  padding: 8px 10px;
+  padding: 0.5rem 0.625rem;
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  font-size: 14px;
+  font-size: 0.875rem;
   font-family: inherit;
   outline: none;
-  margin-bottom: 14px;
+  margin-bottom: 0.875rem;
+  resize: vertical;
+  min-height: 5.625rem;
 }
-.feedback-modal select:focus,
 .feedback-modal textarea:focus {
   border-color: var(--accent);
-}
-.feedback-modal textarea {
-  resize: vertical;
-  min-height: 90px;
 }
 
 .fb-actions {
   display: flex;
-  gap: 8px;
+  gap: 0.5rem;
   justify-content: flex-end;
 }
 .fb-actions button {
-  padding: 8px 18px;
+  padding: 0.5rem 1.125rem;
   border-radius: var(--radius);
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
   border: none;
@@ -202,9 +223,9 @@ async function onSubmit() {
 }
 
 .fb-status {
-  font-size: 12px;
-  margin-top: 8px;
-  min-height: 16px;
+  font-size: 0.75rem;
+  margin-top: 0.5rem;
+  min-height: 1rem;
 }
 .fb-status.error {
   color: var(--danger);

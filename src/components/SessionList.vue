@@ -93,8 +93,8 @@ const countText = computed(() => {
 
 <style scoped>
 .sidebar {
-  width: 340px;
-  min-width: 260px;
+  width: 21.25rem;
+  min-width: 16.25rem;
   flex-shrink: 0;
   background: var(--sidebar-bg);
   border-right: 1px solid var(--border);
@@ -107,20 +107,20 @@ const countText = computed(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 16px;
+  padding: 0.625rem 1rem;
   border-bottom: 1px solid var(--border);
-  min-height: 50px;
+  min-height: 3.125rem;
   flex-shrink: 0;
 }
 
 .session-count {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
   font-weight: 600;
 }
 
 .time-gate {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--accent);
   font-weight: 600;
   white-space: nowrap;
@@ -136,24 +136,24 @@ const countText = computed(() => {
 
 .scroll-loader {
   text-align: center;
-  padding: 10px;
-  font-size: 12px;
+  padding: 0.625rem;
+  font-size: 0.75rem;
   color: var(--text-secondary);
 }
 
 .search-error {
-  padding: 24px 16px;
+  padding: 1.5rem 1rem;
   text-align: center;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 .search-clear-link {
-  margin-top: 8px;
+  margin-top: 0.5rem;
   background: none;
   border: none;
   color: var(--accent);
   cursor: pointer;
-  font-size: 13px;
+  font-size: 0.8125rem;
   text-decoration: underline;
 }
 .search-clear-link:hover {

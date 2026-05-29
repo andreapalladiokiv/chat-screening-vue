@@ -364,19 +364,19 @@ async function onClear() {
 .filter-popover {
   display: none;
   position: fixed;
-  top: 50px;
+  top: 3.125rem;
   left: 50%;
   transform: translateX(-50%);
-  width: 720px;
+  width: 45rem;
   max-width: 95vw;
-  max-height: calc(100vh - 70px);
+  max-height: calc(100vh - 4.375rem);
   overflow-y: auto;
   background: #fff;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-xl);
   z-index: var(--z-modal);
-  padding: 20px 24px;
+  padding: 1.25rem 1.5rem;
 }
 .filter-popover.open {
   display: block;
@@ -386,20 +386,20 @@ async function onClear() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 16px;
+  margin-bottom: 1rem;
 }
 .filter-popover-header h3 {
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 700;
   color: var(--text-primary);
 }
 .filter-popover-close {
   background: none;
   border: none;
-  font-size: 18px;
+  font-size: 1.125rem;
   color: var(--text-secondary);
   cursor: pointer;
-  padding: 2px 6px;
+  padding: 2px 0.375rem;
   border-radius: var(--radius-sm);
 }
 .filter-popover-close:hover {
@@ -407,26 +407,26 @@ async function onClear() {
 }
 
 .filter-group {
-  margin-bottom: 14px;
+  margin-bottom: 0.875rem;
 }
 .filter-group-label {
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.05em;
   color: var(--text-secondary);
-  margin-bottom: 8px;
+  margin-bottom: 0.5rem;
   display: block;
 }
 .filter-group-fields {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 0.5rem;
   align-items: flex-end;
 }
 .filter-group + .filter-group {
   border-top: 1px solid var(--border);
-  padding-top: 14px;
+  padding-top: 0.875rem;
 }
 
 .filter-cell {
@@ -435,7 +435,7 @@ async function onClear() {
   gap: 3px;
 }
 .filter-cell > label {
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 600;
   color: var(--text-secondary);
   white-space: nowrap;
@@ -444,34 +444,34 @@ async function onClear() {
 .filter-cell input[type='date'],
 .filter-cell input[type='datetime-local'],
 .filter-cell input[type='number'] {
-  padding: 6px 8px;
+  padding: 0.375rem 0.5rem;
   border: 1px solid var(--border);
   border-radius: 4px;
-  font-size: 12px;
+  font-size: 0.75rem;
   outline: none;
   background: #fff;
   color: var(--text-primary);
   min-width: 0;
 }
 .filter-cell input[type='number'] {
-  width: 72px;
+  width: 4.5rem;
 }
 .filter-cell-date {
-  width: 190px;
-  min-width: 190px;
+  width: 11.875rem;
+  min-width: 11.875rem;
 }
 /* Match MultiSelectDropdown shape: native chevron replaced with the same
  * SVG arrow so all six "boolean / multi" selectors render visually
  * uniform across the popover. */
 .filter-cell select {
-  min-width: 110px;
+  min-width: 6.875rem;
   -webkit-appearance: none;
   -moz-appearance: none;
   appearance: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5' viewBox='0 0 8 5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%23556064'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 8px center;
-  padding-right: 24px;
+  background-position: right 0.5rem center;
+  padding-right: 1.5rem;
 }
 .filter-cell select:focus,
 .filter-cell input:focus {
@@ -484,25 +484,25 @@ async function onClear() {
 
 .filter-date-warning {
   color: var(--danger);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 600;
-  margin-top: 4px;
+  margin-top: 0.25rem;
 }
 
 .filter-popover-actions {
   display: flex;
-  gap: 8px;
+  gap: 0.5rem;
   justify-content: flex-end;
-  margin-top: 16px;
-  padding-top: 12px;
+  margin-top: 1rem;
+  padding-top: 0.75rem;
   border-top: 1px solid var(--border);
 }
 .filter-clear-btn {
   background: none;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 6px 14px;
-  font-size: 12px;
+  padding: 0.375rem 0.875rem;
+  font-size: 0.75rem;
   color: var(--text-secondary);
   cursor: pointer;
   white-space: nowrap;
@@ -512,12 +512,12 @@ async function onClear() {
   color: var(--danger);
 }
 .filter-apply-btn {
-  padding: 6px 18px;
+  padding: 0.375rem 1.125rem;
   background: var(--accent);
   color: #fff;
   border: none;
   border-radius: var(--radius-sm);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   cursor: pointer;
   transition: background 0.2s;

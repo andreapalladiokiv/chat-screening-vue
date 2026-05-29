@@ -13,6 +13,8 @@ import {
   type SessionFilterParams,
 } from '@/api/sessions';
 import { subscribeChatMessages, unsubscribeChannel, type RealtimeRow } from '@/api/realtime';
+import { reviewedSessionsKey } from '@/constants/storage';
+import { parseAndExtractAiOutput } from '@/utils/extractAiOutput';
 import { useMessagesStore } from '@/stores/messages';
 import type { Session } from '@/types/session';
 import type { ChatMessageRow } from '@/types/message';
@@ -70,13 +72,9 @@ export const useSessionsStore = defineStore('sessions', () => {
    * so different environments stay separate. */
   const reviewedIds = ref<Set<string>>(new Set());
 
-  function reviewedKey(): string {
-    const projectId = localStorage.getItem('sb_project_id') || 'default';
-    return `sb_reviewed_${projectId}`;
-  }
   function loadReviewed(): void {
     try {
-      const raw = localStorage.getItem(reviewedKey());
+      const raw = localStorage.getItem(reviewedSessionsKey());
       reviewedIds.value = raw ? new Set(JSON.parse(raw) as string[]) : new Set();
     } catch {
       reviewedIds.value = new Set();
@@ -84,7 +82,7 @@ export const useSessionsStore = defineStore('sessions', () => {
   }
   function saveReviewed(): void {
     try {
-      localStorage.setItem(reviewedKey(), JSON.stringify([...reviewedIds.value]));
+      localStorage.setItem(reviewedSessionsKey(), JSON.stringify([...reviewedIds.value]));
     } catch {
       // localStorage may be unavailable in private mode; non-fatal.
     }
@@ -299,16 +297,7 @@ export const useSessionsStore = defineStore('sessions', () => {
       }
 
       if (type === 'ai' && toolCalls.length === 0) {
-        let content: unknown = msg.content;
-        if (typeof content === 'string') {
-          try { content = JSON.parse(content); } catch { content = null; }
-        }
-        let out: Record<string, unknown> | null = null;
-        if (content && typeof content === 'object') {
-          const c = content as Record<string, unknown>;
-          if (c.output && typeof c.output === 'object') out = c.output as Record<string, unknown>;
-          else if (typeof c.text !== 'undefined') out = c;
-        }
+        const out = parseAndExtractAiOutput(msg.content);
         if (out) {
           const cat = out.request_category;
           const rtype = out.request_type;

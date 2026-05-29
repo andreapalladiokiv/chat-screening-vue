@@ -1,26 +1,21 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed } from 'vue';
 import type { ParsedMessage } from '@/types/message';
 import { formatTime } from '@/utils/formatDate';
 import { formatToolCallArgs } from '@/utils/parseMessage';
 import { useMessagesStore } from '@/stores/messages';
 import { useSessionsStore } from '@/stores/sessions';
 import { useFeedbackStore } from '@/stores/feedback';
+import { useClipboard } from '@/composables/useClipboard';
 
 const props = defineProps<{ parsed: ParsedMessage; index: number }>();
 const messages = useMessagesStore();
 const sessions = useSessionsStore();
 const feedback = useFeedbackStore();
 
-const justCopied = ref(false);
-async function onCopy() {
-  try {
-    await navigator.clipboard.writeText(props.parsed.text);
-    justCopied.value = true;
-    setTimeout(() => (justCopied.value = false), 1200);
-  } catch {
-    // ignore
-  }
+const { justCopied, copy } = useClipboard();
+function onCopy() {
+  copy(props.parsed.text);
 }
 
 function onFeedback() {
@@ -138,8 +133,15 @@ const systemEntries = computed(() => {
       <button class="msg-copy-btn" :class="{ copied: justCopied }" title="Copy message text" @click="onCopy">
         {{ justCopied ? 'Copied!' : 'Copy' }}
       </button>
-      <button class="feedback-hover-btn" title="Leave feedback on this message" @click="onFeedback">
-        Feedback
+      <button
+        class="feedback-hover-btn"
+        aria-label="Leave feedback on this message"
+        title="Leave feedback on this message"
+        @click="onFeedback"
+      >
+        <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M2 3.5A1.5 1.5 0 0 1 3.5 2h9A1.5 1.5 0 0 1 14 3.5v6A1.5 1.5 0 0 1 12.5 11H7.5l-3.5 3v-3H3.5A1.5 1.5 0 0 1 2 9.5v-6Z" />
+        </svg>
       </button>
     </div>
   </div>
@@ -149,7 +151,7 @@ const systemEntries = computed(() => {
 .message-wrapper {
   display: flex;
   align-items: flex-start;
-  gap: 4px;
+  gap: 0.25rem;
   margin-bottom: 2px;
   position: relative;
 }
@@ -181,7 +183,7 @@ const systemEntries = computed(() => {
 .message-wrapper.tool .msg-action-group,
 .message-wrapper.system .msg-action-group {
   position: absolute;
-  left: calc(90% + 6px);
+  left: calc(90% + 0.375rem);
   top: 2px;
   flex-direction: row;
 }
@@ -191,8 +193,8 @@ const systemEntries = computed(() => {
   background: var(--sidebar-bg);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 3px 6px;
-  font-size: 11px;
+  padding: 3px 0.375rem;
+  font-size: 0.6875rem;
   color: var(--text-secondary);
   cursor: pointer;
   line-height: 1.2;
@@ -207,14 +209,21 @@ const systemEntries = computed(() => {
   color: var(--accent);
   border-color: var(--accent);
 }
+.feedback-hover-btn {
+  /* Square-ish to match Copy's height; the SVG inherits color via currentColor. */
+  padding: 3px 0.3125rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
 
 .message {
   max-width: 65%;
-  padding: 10px 14px;
+  padding: 0.625rem 0.875rem;
   border-radius: var(--radius);
   position: relative;
   line-height: 1.5;
-  font-size: 15px;
+  font-size: 0.9375rem;
   box-shadow: var(--shadow);
   word-wrap: break-word;
 }
@@ -231,9 +240,9 @@ const systemEntries = computed(() => {
   background: rgba(255, 255, 255, 0.92);
   width: 80%;
   max-width: 80%;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-secondary);
-  padding: 10px 16px;
+  padding: 0.625rem 1rem;
   border-radius: var(--radius);
   border: 1px solid var(--border);
 }
@@ -241,9 +250,9 @@ const systemEntries = computed(() => {
   background: var(--tool-bg);
   width: 80%;
   max-width: 80%;
-  font-size: 14px;
+  font-size: 0.875rem;
   border-radius: var(--radius);
-  max-height: 500px;
+  max-height: 31.25rem;
   overflow-y: auto;
 }
 
@@ -252,18 +261,18 @@ const systemEntries = computed(() => {
 }
 
 .message-time {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
-  margin-top: 4px;
+  margin-top: 0.25rem;
   text-align: right;
 }
 
 .message-label {
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 700;
-  margin-bottom: 4px;
+  margin-bottom: 0.25rem;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.05em;
 }
 .message-label.human-label { color: var(--pill-human-text); }
 .message-label.ai-label { color: var(--badge-text); }
@@ -272,14 +281,14 @@ const systemEntries = computed(() => {
 .badges {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 6px;
+  gap: 0.25rem;
+  margin-top: 0.375rem;
 }
 .badge {
   display: inline-block;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 500;
-  padding: 2px 8px;
+  padding: 0.125rem 0.5rem;
   border-radius: var(--radius-lg);
   background: var(--badge-bg);
   color: var(--badge-text);
@@ -296,29 +305,29 @@ const systemEntries = computed(() => {
 .system-grid {
   display: grid;
   grid-template-columns: auto 1fr;
-  gap: 2px 12px;
+  gap: 2px 0.75rem;
   text-align: left;
 }
 .system-grid-label {
   font-weight: 700;
   color: var(--text-primary);
-  font-size: 11px;
+  font-size: 0.6875rem;
   text-transform: uppercase;
-  letter-spacing: 0.3px;
+  letter-spacing: 0.03em;
   white-space: nowrap;
 }
 .system-grid-value {
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 0.75rem;
   word-break: break-all;
 }
 
 .tool-details {
-  margin-top: 4px;
+  margin-top: 0.25rem;
 }
 .tool-details summary {
   cursor: pointer;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-secondary);
   font-weight: 600;
 }
@@ -326,13 +335,13 @@ const systemEntries = computed(() => {
   color: var(--text-primary);
 }
 .tool-details pre {
-  margin-top: 6px;
-  padding: 8px;
+  margin-top: 0.375rem;
+  padding: 0.5rem;
   background: rgba(0, 0, 0, 0.04);
   border-radius: 4px;
-  font-size: 12px;
+  font-size: 0.75rem;
   overflow-x: auto;
-  max-height: 300px;
+  max-height: 18.75rem;
   overflow-y: auto;
 }
 </style>

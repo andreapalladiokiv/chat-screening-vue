@@ -5,6 +5,8 @@ import { useMessagesStore } from '@/stores/messages';
 import { useFeedbackStore } from '@/stores/feedback';
 import { formatDuration } from '@/utils/formatDuration';
 import { lastAiClassification } from '@/utils/sessionClassification';
+import { buildTypePills } from '@/utils/typePills';
+import { hasEnrichment } from '@/utils/sessionEnrichment';
 import InSessionSearch from '@/components/InSessionSearch.vue';
 
 const sessions = useSessionsStore();
@@ -29,33 +31,13 @@ const duration = computed(() => {
 
 const classification = computed(() => lastAiClassification(messages.parsed));
 
-const typePills = computed(() => {
-  const tc = session.value?.typeCounts ?? { human: 0, ai: 0, tool: 0, system: 0 };
-  const parts: { kind: 'human' | 'ai' | 'tool' | 'system'; n: number; label: string }[] = [];
-  if (tc.human) parts.push({ kind: 'human', n: tc.human, label: 'human' });
-  if (tc.ai) parts.push({ kind: 'ai', n: tc.ai, label: 'ai' });
-  if (tc.tool) parts.push({ kind: 'tool', n: tc.tool, label: 'tool' });
-  if (tc.system) parts.push({ kind: 'system', n: tc.system, label: 'sys' });
-  return parts;
-});
+const typePills = computed(() =>
+  buildTypePills(session.value?.typeCounts ?? { human: 0, ai: 0, tool: 0, system: 0 }),
+);
 
 const tools = computed(() => session.value?.tools ?? []);
 
-const hasVisitorEnrichment = computed(() => {
-  const s = session.value;
-  return !!(
-    s &&
-    (s.project ||
-      s.visitorType ||
-      s.language ||
-      s.isWhatsapp ||
-      s.validation ||
-      s.hasLead ||
-      s.hasCase ||
-      s.hasBooking ||
-      s.conversationId)
-  );
-});
+const hasVisitorEnrichment = computed(() => hasEnrichment(session.value));
 
 function onReviewedToggle() {
   if (session.value) sessions.toggleReviewed(session.value.id);
@@ -169,8 +151,8 @@ function onJump(target: 'first-ai' | 'first-tool' | 'last') {
 
 <style scoped>
 .detail-sidebar {
-  width: 320px;
-  min-width: 260px;
+  width: 20rem;
+  min-width: 16.25rem;
   flex-shrink: 0;
   background: var(--sidebar-bg);
   border-left: 1px solid var(--border);
@@ -180,7 +162,7 @@ function onJump(target: 'first-ai' | 'first-tool' | 'last') {
 }
 
 .detail-sidebar-section {
-  padding: 12px 14px;
+  padding: 0.75rem 0.875rem;
   border-bottom: 1px solid var(--border);
 }
 .detail-sidebar-section:last-child {
@@ -188,12 +170,12 @@ function onJump(target: 'first-ai' | 'first-tool' | 'last') {
 }
 
 .detail-sidebar-label {
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.05em;
   color: var(--text-secondary);
-  margin-bottom: 6px;
+  margin-bottom: 0.375rem;
   display: block;
 }
 
@@ -201,7 +183,7 @@ function onJump(target: 'first-ai' | 'first-tool' | 'last') {
 .detail-sidebar-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 0.375rem;
 }
 .chat-reviewed-btn,
 .chat-feedback-btn,
@@ -211,8 +193,8 @@ function onJump(target: 'first-ai' | 'first-tool' | 'last') {
   background: none;
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 6px 8px;
-  font-size: 12px;
+  padding: 0.375rem 0.5rem;
+  font-size: 0.75rem;
   color: var(--text-secondary);
   cursor: pointer;
   white-space: nowrap;
@@ -238,22 +220,22 @@ function onJump(target: 'first-ai' | 'first-tool' | 'last') {
 
 /* ── In-session search ──────────────────────────────────────────────── */
 .detail-sidebar-search {
-  padding-top: 8px;
-  padding-bottom: 8px;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
 }
 
 /* ── Quick-jump buttons ─────────────────────────────────────────────── */
 .summary-jump-btns {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 0.25rem;
 }
 .summary-jump-btn {
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 3px 8px;
-  font-size: 10px;
+  padding: 3px 0.5rem;
+  font-size: 0.625rem;
   color: var(--text-secondary);
   cursor: pointer;
   white-space: nowrap;
@@ -266,11 +248,11 @@ function onJump(target: 'first-ai' | 'first-tool' | 'last') {
 
 /* ── Duration ───────────────────────────────────────────────────────── */
 .summary-duration {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
   font-weight: 600;
   background: var(--bg);
-  padding: 2px 8px;
+  padding: 2px 0.5rem;
   border-radius: var(--radius-sm);
   display: inline-block;
 }
@@ -279,14 +261,14 @@ function onJump(target: 'first-ai' | 'first-tool' | 'last') {
 .type-counts {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 0.25rem;
   margin-top: 0;
 }
 .type-pill {
   display: inline-block;
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 600;
-  padding: 1px 6px;
+  padding: 1px 0.375rem;
   border-radius: 10px;
 }
 .type-pill.human { background: var(--pill-human-bg); color: var(--pill-human-text); }
@@ -298,14 +280,14 @@ function onJump(target: 'first-ai' | 'first-tool' | 'last') {
 .badges {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 0.25rem;
   margin-top: 0;
 }
 .badge {
   display: inline-block;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 500;
-  padding: 2px 8px;
+  padding: 2px 0.5rem;
   border-radius: var(--radius-lg);
   background: var(--badge-bg);
   color: var(--badge-text);
@@ -349,18 +331,18 @@ function onJump(target: 'first-ai' | 'first-tool' | 'last') {
 .chat-header-visitor {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 0.25rem;
 }
 
 /* ── Tools used ─────────────────────────────────────────────────────── */
 .summary-tools {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 0.25rem;
 }
 .summary-tool-tag {
-  font-size: 11px;
-  padding: 2px 8px;
+  font-size: 0.6875rem;
+  padding: 2px 0.5rem;
   border-radius: var(--radius-full);
   background: var(--tool-bg);
   color: var(--tool-text);
@@ -368,7 +350,7 @@ function onJump(target: 'first-ai' | 'first-tool' | 'last') {
 }
 .empty-line {
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 </style>

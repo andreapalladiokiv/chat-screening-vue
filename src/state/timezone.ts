@@ -1,6 +1,7 @@
 import { ref } from 'vue';
+import { StorageKeys } from '@/constants/storage';
 
-const STORAGE_KEY = 'chat_view_timezone';
+const STORAGE_KEY = StorageKeys.timezone;
 
 /** Tiny shared state for the active timezone — exported as a ref so
  * components that consume it via formatDate inside a computed will

@@ -225,18 +225,18 @@ onBeforeUnmount(() => {
 .dd-filter {
   position: relative;
   width: 100%;
-  min-width: 160px;
+  min-width: 10rem;
 }
 
 .dd-trigger {
   width: 100%;
   text-align: left;
-  padding: 6px 8px;
+  padding: 0.375rem 0.5rem;
   border: 1px solid var(--border);
   border-radius: 4px;
   background: #fff;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-primary);
   outline: none;
   white-space: nowrap;
@@ -244,8 +244,8 @@ onBeforeUnmount(() => {
   text-overflow: ellipsis;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5' viewBox='0 0 8 5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%23556064'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 8px center;
-  padding-right: 24px;
+  background-position: right 0.5rem center;
+  padding-right: 1.5rem;
 }
 .dd-trigger.empty {
   color: var(--text-secondary);
@@ -260,13 +260,13 @@ onBeforeUnmount(() => {
   position: absolute;
   top: calc(100% + 2px);
   left: 0;
-  width: 224px;
+  width: 14rem;
   background: #fff;
   border: 1px solid var(--border);
   border-radius: 4px;
   z-index: var(--z-dropdown);
   box-shadow: var(--shadow-md);
-  padding: 8px;
+  padding: 0.5rem;
 }
 .dd-panel.open {
   display: block;
@@ -276,10 +276,10 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 6px;
+  margin-bottom: 0.375rem;
 }
 .cal-month {
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -287,9 +287,9 @@ onBeforeUnmount(() => {
   background: none;
   border: 1px solid var(--border);
   border-radius: 4px;
-  width: 22px;
-  height: 22px;
-  font-size: 14px;
+  width: 1.375rem;
+  height: 1.375rem;
+  font-size: 0.875rem;
   line-height: 1;
   color: var(--text-secondary);
   cursor: pointer;
@@ -307,7 +307,7 @@ onBeforeUnmount(() => {
   gap: 1px;
 }
 .cal-weekday {
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 600;
   color: var(--text-secondary);
   text-align: center;
@@ -316,9 +316,9 @@ onBeforeUnmount(() => {
 .cal-day {
   background: none;
   border: none;
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-primary);
-  padding: 4px 0;
+  padding: 0.25rem 0;
   cursor: pointer;
   border-radius: 3px;
   text-align: center;
@@ -340,17 +340,17 @@ onBeforeUnmount(() => {
 .cal-time {
   display: flex;
   align-items: center;
-  gap: 4px;
-  margin-top: 8px;
-  padding-top: 8px;
+  gap: 0.25rem;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
   border-top: 1px solid var(--border);
 }
 .cal-time input[type='number'] {
-  width: 38px;
-  padding: 3px 4px;
+  width: 2.375rem;
+  padding: 3px 0.25rem;
   border: 1px solid var(--border);
   border-radius: 4px;
-  font-size: 12px;
+  font-size: 0.75rem;
   text-align: center;
   outline: none;
   -moz-appearance: textfield;
@@ -372,8 +372,8 @@ onBeforeUnmount(() => {
   background: none;
   border: 1px solid var(--border);
   border-radius: 4px;
-  padding: 2px 6px;
-  font-size: 10px;
+  padding: 2px 0.375rem;
+  font-size: 0.625rem;
   font-weight: 600;
   color: var(--text-secondary);
   cursor: pointer;
@@ -383,6 +383,6 @@ onBeforeUnmount(() => {
   color: var(--accent);
 }
 .cal-action + .cal-action {
-  margin-left: 4px;
+  margin-left: 0.25rem;
 }
 </style>
