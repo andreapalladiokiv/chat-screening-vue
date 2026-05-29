@@ -19,6 +19,7 @@ const router = useRouter();
 // from localStorage so the "Reviewed ✓" toggle persists across reloads.
 onMounted(() => {
   sessions.loadReviewed();
+  sessions.loadFilterOptions();
   sessions.subscribeRealtime();
 });
 onBeforeUnmount(() => sessions.unsubscribeRealtime());

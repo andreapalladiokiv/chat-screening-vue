@@ -1,4 +1,6 @@
 import { getSupabaseClient } from '@/api/supabase';
+import { buildSessionFromMessages } from '@/utils/buildSession';
+import type { ChatMessageRow } from '@/types/message';
 import type { Session, SessionRpcRow } from '@/types/session';
 
 const DEFAULT_LIMIT = 50;
@@ -130,6 +132,48 @@ export async function loadFilteredSessions(filters: SessionFilterParams): Promis
   return callRpc(toRpcParams(DEFAULT_LIMIT, filters));
 }
 
+/** Visitor enrichment fields fetched per-session via direct table read.
+ * Used by the realtime INSERT handler to fill in badges for sessions
+ * that didn't come through the RPC. */
+export interface VisitorEnrichment {
+  project: string | null;
+  visitorType: string | null;
+  language: string | null;
+  validation: boolean;
+  isWhatsapp: boolean;
+  hasLead: boolean;
+  hasCase: boolean;
+  hasBooking: boolean;
+  requestId: string | null;
+  maskedClientPhone: string | null;
+  conversationId: string | null;
+}
+
+export async function fetchVisitorEnrichment(sessionId: string): Promise<VisitorEnrichment | null> {
+  const db = getSupabaseClient();
+  const { data, error } = await db
+    .from('visitors_settings')
+    .select(
+      'project, type, language, validation, is_whatsapp, lead_id, case_id, booking_identifier, request_id, masked_client_phone, conversation_id',
+    )
+    .eq('session_id', sessionId)
+    .maybeSingle();
+  if (error || !data) return null;
+  return {
+    project: data.project ?? null,
+    visitorType: data.type ?? null,
+    language: data.language ?? null,
+    validation: data.validation ?? false,
+    isWhatsapp: data.is_whatsapp ?? false,
+    hasLead: data.lead_id != null,
+    hasCase: data.case_id != null,
+    hasBooking: data.booking_identifier != null,
+    requestId: data.request_id ?? null,
+    maskedClientPhone: data.masked_client_phone ?? null,
+    conversationId: data.conversation_id ?? null,
+  };
+}
+
 /**
  * Server-side substring search via the RPC's p_session_id parameter (ILIKE
  * against chat_messages.session_id and visitors_settings.conversation_id).
@@ -138,4 +182,93 @@ export async function loadFilteredSessions(filters: SessionFilterParams): Promis
  */
 export async function searchSessions(query: string): Promise<Session[]> {
   return callRpc(toRpcParams(DEFAULT_LIMIT, { sessionId: query }));
+}
+
+/**
+ * Tier-1 search: exact match against chat_messages.session_id, or its
+ * fallback chain through visitors_settings.conversation_id → session_id.
+ * Builds the Session metadata client-side from the resolved rows. Returns
+ * null when neither path matches.
+ *
+ * Faster than the RPC ILIKE for known-id navigation (e.g. paste a session
+ * id into search) and works for sessions older than the 3-day default
+ * window. The caller layers the RPC fallback on top.
+ */
+export async function tryExactSessionLookup(query: string): Promise<Session | null> {
+  const db = getSupabaseClient();
+
+  // 1. Direct hit on chat_messages.session_id.
+  const direct = await db
+    .from('chat_messages')
+    .select('session_id, created_at, message')
+    .eq('session_id', query)
+    .order('created_at', { ascending: true });
+  let rows = (direct.data ?? []) as ChatMessageRow[];
+  let sessionId = query;
+
+  if (rows.length === 0) {
+    // 2. Resolve via visitors_settings.conversation_id, then re-read chat_messages.
+    const vs = await db
+      .from('visitors_settings')
+      .select('session_id')
+      .eq('conversation_id', query)
+      .limit(1)
+      .maybeSingle();
+    if (!vs.data || !vs.data.session_id) return null;
+    sessionId = vs.data.session_id as string;
+    const second = await db
+      .from('chat_messages')
+      .select('session_id, created_at, message')
+      .eq('session_id', sessionId)
+      .order('created_at', { ascending: true });
+    rows = (second.data ?? []) as ChatMessageRow[];
+    if (rows.length === 0) return null;
+  }
+
+  return buildSessionFromMessages(sessionId, rows);
+}
+
+/**
+ * The shape returned by the get_filter_options RPC. Keys come back from PG
+ * in snake_case; the front-end keeps them as-is for parity with legacy.
+ */
+export interface FilterOptions {
+  tools: string[];
+  categories: string[];
+  request_types: string[];
+  projects: string[];
+  visitor_types: string[];
+  languages: string[];
+}
+
+/**
+ * Load the set of values that populate the filter popover's multi-selects.
+ * Times out at 10s to match legacy; on failure we return empty arrays
+ * (filter popover will simply show "no options" — non-fatal).
+ */
+export async function loadFilterOptions(): Promise<FilterOptions> {
+  const db = getSupabaseClient();
+  const rpc = db.rpc('get_filter_options');
+  const timeout = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error('get_filter_options timed out')), 10_000),
+  );
+  try {
+    const result = (await Promise.race([rpc, timeout])) as {
+      data: Partial<FilterOptions> | null;
+      error: unknown;
+    };
+    if (result.error) throw result.error;
+    const d = result.data ?? {};
+    return {
+      tools: [...(d.tools ?? [])].sort(),
+      categories: [...(d.categories ?? [])].sort(),
+      request_types: [...(d.request_types ?? [])].sort(),
+      projects: [...(d.projects ?? [])].sort(),
+      visitor_types: [...(d.visitor_types ?? [])].sort(),
+      languages: [...(d.languages ?? [])].sort(),
+    };
+  } catch (err) {
+    console.warn('[filters] loadFilterOptions failed:', err);
+    return { tools: [], categories: [], request_types: [], projects: [], visitor_types: [], languages: [] };
+  }
 }

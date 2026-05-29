@@ -5,11 +5,17 @@ import {
   loadDefaultSessions as apiLoadDefault,
   loadMoreSessions as apiLoadMore,
   loadFilteredSessions as apiLoadFiltered,
+  loadFilterOptions as apiLoadFilterOptions,
+  fetchVisitorEnrichment as apiFetchEnrichment,
   searchSessions as apiSearch,
+  tryExactSessionLookup as apiExactLookup,
+  type FilterOptions,
   type SessionFilterParams,
 } from '@/api/sessions';
-import { subscribeChatMessages, unsubscribeChannel } from '@/api/realtime';
+import { subscribeChatMessages, unsubscribeChannel, type RealtimeRow } from '@/api/realtime';
+import { useMessagesStore } from '@/stores/messages';
 import type { Session } from '@/types/session';
+import type { ChatMessageRow } from '@/types/message';
 
 const RETRY_DELAY_MS = 2_000;
 const MAX_RETRIES = 2;
@@ -55,6 +61,11 @@ export const useSessionsStore = defineStore('sessions', () => {
   const sortBy = ref<SortBy>('newest');
   const reviewedFilter = ref<ReviewedFilter>('all');
 
+  /** Client-side boolean filters — applied in `visible` without an RPC
+   * round-trip. '' = no filter; 'true' / 'false' = boolean match. */
+  const verifiedFilter = ref<'' | 'true' | 'false'>('');
+  const endConvFilter = ref<'' | 'true' | 'false'>('');
+
   /** Reviewed-session IDs, mirrored to localStorage under a per-project key
    * so different environments stay separate. */
   const reviewedIds = ref<Set<string>>(new Set());
@@ -94,10 +105,19 @@ export const useSessionsStore = defineStore('sessions', () => {
   const visible = computed<Session[]>(() => {
     const base = searchResults.value !== null ? searchResults.value : list.value;
 
+    // Client-side verified / end-conversation booleans — predicate sourced
+    // from each session's aggregated `hasVerified` / `hasEndConversation`
+    // (true if ANY AI final in the session emitted that flag).
+    const booleanFiltered = base.filter((s) => {
+      if (verifiedFilter.value && String(s.hasVerified) !== verifiedFilter.value) return false;
+      if (endConvFilter.value && String(s.hasEndConversation) !== endConvFilter.value) return false;
+      return true;
+    });
+
     const filtered =
       reviewedFilter.value === 'all'
-        ? base
-        : base.filter((s) => {
+        ? booleanFiltered
+        : booleanFiltered.filter((s) => {
             const isReviewed = reviewedIds.value.has(s.id);
             return reviewedFilter.value === 'reviewed' ? isReviewed : !isReviewed;
           });
@@ -123,6 +143,20 @@ export const useSessionsStore = defineStore('sessions', () => {
   /** Filter state. appliedFilters !== null means filters are active. */
   const appliedFilters = ref<SessionFilterParams | null>(null);
   const filtersApplied = computed(() => appliedFilters.value !== null);
+
+  /** Catalogue of possible values for the multi-select dropdowns in the
+   * filter popover. Loaded once via get_filter_options after auth. */
+  const filterOptions = ref<FilterOptions>({
+    tools: [],
+    categories: [],
+    request_types: [],
+    projects: [],
+    visitor_types: [],
+    languages: [],
+  });
+  async function loadFilterOptions(): Promise<void> {
+    filterOptions.value = await apiLoadFilterOptions();
+  }
 
   async function applyFilters(filters: SessionFilterParams): Promise<void> {
     loading.value = true;
@@ -167,10 +201,140 @@ export const useSessionsStore = defineStore('sessions', () => {
           realtimeRetryHandle = setTimeout(subscribeRealtime, REALTIME_RETRY_MS);
         }
       },
-      // INSERT handler is a stub for now — list updates from realtime arrive
-      // in a later M2 sub-milestone. The subscription itself toggles isLive.
-      onInsert: () => { /* TODO: insert into list when filter/search inactive */ },
+      onInsert: handleRealtimeInsert,
     });
+  }
+
+  /**
+   * Aggregate a new chat_messages row into the session it belongs to, then
+   * move that session to the front of the list. Mirrors legacy semantics:
+   *
+   *   - skip entirely when server filters or search are active (new row
+   *     likely sits outside the filter's date/criteria window)
+   *   - if session is new: prepend with zeroed aggregates and lazily fetch
+   *     visitors_settings to enrich badges
+   *   - increment count, update latest, bump type-counts
+   *   - collect tool names from tool_calls / type='tool' messages
+   *   - for AI finals: extract request_category / request_type / verified /
+   *     end_conversation (handles wrapped + flat content formats)
+   *   - mirror the row into messages.appendRow if it's for the open chat
+   */
+  function handleRealtimeInsert(row: RealtimeRow): void {
+    if (!row || !row.session_id) return;
+    if (filtersApplied.value || searchResults.value !== null) return;
+
+    const sid = row.session_id;
+    const ts = row.created_at ?? new Date().toISOString();
+
+    let msg: Record<string, unknown> | null = null;
+    try {
+      msg =
+        typeof row.message === 'string'
+          ? (JSON.parse(row.message) as Record<string, unknown>)
+          : (row.message as Record<string, unknown>);
+    } catch {
+      msg = null;
+    }
+
+    let session = list.value.find((s) => s.id === sid);
+    const isNew = !session;
+    if (!session) {
+      session = {
+        id: sid,
+        count: 0,
+        latest: ts,
+        earliest: ts,
+        tools: [],
+        typeCounts: { human: 0, ai: 0, tool: 0, system: 0 },
+        categories: [],
+        requestTypes: [],
+        hasVerified: false,
+        hasEndConversation: false,
+        project: null,
+        visitorType: null,
+        language: null,
+        validation: false,
+        isWhatsapp: false,
+        hasLead: false,
+        hasCase: false,
+        hasBooking: false,
+        requestId: null,
+        maskedClientPhone: null,
+        conversationId: null,
+      };
+      list.value.unshift(session);
+      // Lazy-load visitor enrichment so badges populate without blocking.
+      apiFetchEnrichment(sid).then((vs) => {
+        if (!vs || !session) return;
+        session.project = vs.project;
+        session.visitorType = vs.visitorType;
+        session.language = vs.language;
+        session.validation = vs.validation;
+        session.isWhatsapp = vs.isWhatsapp;
+        session.hasLead = vs.hasLead;
+        session.hasCase = vs.hasCase;
+        session.hasBooking = vs.hasBooking;
+        session.requestId = vs.requestId;
+        session.maskedClientPhone = vs.maskedClientPhone;
+        session.conversationId = vs.conversationId;
+      });
+    }
+
+    session.count += 1;
+    if (ts > session.latest) session.latest = ts;
+    if (ts < session.earliest) session.earliest = ts;
+
+    if (msg) {
+      const type = msg.type as keyof typeof session.typeCounts;
+      if (type in session.typeCounts) session.typeCounts[type] += 1;
+
+      const toolCalls = Array.isArray(msg.tool_calls)
+        ? (msg.tool_calls as { name?: string }[])
+        : [];
+      for (const tc of toolCalls) {
+        if (tc.name && !session.tools.includes(tc.name)) session.tools.push(tc.name);
+      }
+      if (type === 'tool' && typeof msg.name === 'string') {
+        if (!session.tools.includes(msg.name)) session.tools.push(msg.name);
+      }
+
+      if (type === 'ai' && toolCalls.length === 0) {
+        let content: unknown = msg.content;
+        if (typeof content === 'string') {
+          try { content = JSON.parse(content); } catch { content = null; }
+        }
+        let out: Record<string, unknown> | null = null;
+        if (content && typeof content === 'object') {
+          const c = content as Record<string, unknown>;
+          if (c.output && typeof c.output === 'object') out = c.output as Record<string, unknown>;
+          else if (typeof c.text !== 'undefined') out = c;
+        }
+        if (out) {
+          const cat = out.request_category;
+          const rtype = out.request_type;
+          if (typeof cat === 'string' && !session.categories.includes(cat)) session.categories.push(cat);
+          if (typeof rtype === 'string' && !session.requestTypes.includes(rtype)) session.requestTypes.push(rtype);
+          if (out.identity_verified) session.hasVerified = true;
+          if (out.end_conversation) session.hasEndConversation = true;
+        }
+      }
+    }
+
+    // Move to front (newest activity) if not new — unshift already handled
+    // the new-session case.
+    if (!isNew) {
+      const idx = list.value.indexOf(session);
+      if (idx > 0) {
+        list.value.splice(idx, 1);
+        list.value.unshift(session);
+      }
+    }
+
+    // Mirror into the open chat so the bubble pops in without a refetch.
+    if (row.session_id && row.created_at) {
+      const messages = useMessagesStore();
+      messages.appendRow(row as ChatMessageRow);
+    }
   }
 
   function unsubscribeRealtime() {
@@ -209,8 +373,26 @@ export const useSessionsStore = defineStore('sessions', () => {
 
     searchDebounceHandle = setTimeout(async () => {
       try {
+        // Tier 1: exact match on chat_messages.session_id, falling back to
+        // visitors_settings.conversation_id. Index-backed, instant — works
+        // for sessions of any age. Lazily fetch visitor enrichment so
+        // badges populate without blocking.
+        const exact = await apiExactLookup(trimmed);
+        if (myEpoch !== searchEpoch) return;
+        if (exact) {
+          searchResults.value = [exact];
+          searchError.value = null;
+          apiFetchEnrichment(exact.id).then((vs) => {
+            if (!vs) return;
+            if (myEpoch !== searchEpoch) return;
+            Object.assign(exact, vs);
+          });
+          return;
+        }
+
+        // Tier 2: RPC ILIKE substring search across the 3-day window.
         const results = await apiSearch(trimmed);
-        if (myEpoch !== searchEpoch) return; // user kept typing — drop stale response
+        if (myEpoch !== searchEpoch) return;
         searchResults.value = results;
         searchError.value = null;
       } catch (err) {
@@ -331,7 +513,11 @@ export const useSessionsStore = defineStore('sessions', () => {
     filtersApplied,
     sortBy,
     reviewedFilter,
+    verifiedFilter,
+    endConvFilter,
     reviewedIds,
+    filterOptions,
+    loadFilterOptions,
     loadReviewed,
     toggleReviewed,
     setSearchQuery,

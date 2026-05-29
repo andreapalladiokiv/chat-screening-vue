@@ -1,12 +1,48 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import type { ParsedMessage } from '@/types/message';
 import { formatTime } from '@/utils/formatDate';
 import { formatToolCallArgs } from '@/utils/parseMessage';
 import { useMessagesStore } from '@/stores/messages';
+import { useSessionsStore } from '@/stores/sessions';
+import { useFeedbackStore } from '@/stores/feedback';
 
-const props = defineProps<{ parsed: ParsedMessage }>();
+const props = defineProps<{ parsed: ParsedMessage; index: number }>();
 const messages = useMessagesStore();
+const sessions = useSessionsStore();
+const feedback = useFeedbackStore();
+
+const justCopied = ref(false);
+async function onCopy() {
+  try {
+    await navigator.clipboard.writeText(props.parsed.text);
+    justCopied.value = true;
+    setTimeout(() => (justCopied.value = false), 1200);
+  } catch {
+    // ignore
+  }
+}
+
+function onFeedback() {
+  const s = sessions.current;
+  if (!s) return;
+  const toolName =
+    props.parsed.type === 'tool'
+      ? props.parsed.toolName
+      : props.parsed.type === 'ai' && props.parsed.hasToolCalls
+        ? props.parsed.toolCalls.map((tc) => tc.name ?? '').filter(Boolean).join(', ') || undefined
+        : undefined;
+  feedback.openMessageFeedback({
+    type: 'message',
+    session_id: s.id,
+    message_index: props.index,
+    message_type: props.parsed.type,
+    message_timestamp: props.parsed.timestamp,
+    message_text_excerpt: (props.parsed.text ?? '').substring(0, 200),
+    tool_name: toolName,
+    raw_message: props.parsed.raw,
+  });
+}
 
 const wrapperClass = computed(() => {
   // AI-with-tools renders in the "tool" lane (centered, yellow), per legacy.
@@ -96,6 +132,16 @@ const systemEntries = computed(() => {
     <div v-else class="message system-bubble">
       <div class="message-text">{{ parsed.text }}</div>
     </div>
+
+    <!-- Hover actions next to bubble (legacy parity: Copy + Feedback) -->
+    <div class="msg-action-group">
+      <button class="msg-copy-btn" :class="{ copied: justCopied }" title="Copy message text" @click="onCopy">
+        {{ justCopied ? 'Copied!' : 'Copy' }}
+      </button>
+      <button class="feedback-hover-btn" title="Leave feedback on this message" @click="onFeedback">
+        Feedback
+      </button>
+    </div>
   </div>
 </template>
 
@@ -111,6 +157,56 @@ const systemEntries = computed(() => {
 .message-wrapper.ai { justify-content: flex-end; }
 .message-wrapper.system { justify-content: center; }
 .message-wrapper.tool { justify-content: center; }
+
+/* Hover action group (Copy + Feedback) sits next to the bubble. */
+.msg-action-group {
+  display: none;
+  flex-direction: column;
+  gap: 2px;
+  flex-shrink: 0;
+  padding-top: 2px;
+}
+.message-wrapper:hover .msg-action-group {
+  display: flex;
+}
+/* AI rows render bubble on the right — push actions before the bubble. */
+.message-wrapper.ai .msg-action-group {
+  order: -1;
+}
+/* Centered rows (tool / system): place actions just outside the 80% bubble. */
+.message-wrapper.tool,
+.message-wrapper.system {
+  position: relative;
+}
+.message-wrapper.tool .msg-action-group,
+.message-wrapper.system .msg-action-group {
+  position: absolute;
+  left: calc(90% + 6px);
+  top: 2px;
+  flex-direction: row;
+}
+
+.msg-copy-btn,
+.feedback-hover-btn {
+  background: var(--sidebar-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 3px 6px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.msg-copy-btn:hover,
+.feedback-hover-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.msg-copy-btn.copied {
+  color: var(--accent);
+  border-color: var(--accent);
+}
 
 .message {
   max-width: 65%;

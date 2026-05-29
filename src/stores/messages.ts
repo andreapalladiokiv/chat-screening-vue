@@ -48,6 +48,17 @@ export const useMessagesStore = defineStore('messages', () => {
     jumpTarget.value = null;
   }
 
+  /** Append a row from realtime — only if it belongs to the currently
+   * loaded session and isn't already present. */
+  function appendRow(row: ChatMessageRow): void {
+    if (!sessionId.value || row.session_id !== sessionId.value) return;
+    // De-dupe by created_at + identical message (cheap heuristic — chat_messages
+    // doesn't have a primary key surfaced in the realtime payload).
+    const last = rows.value[rows.value.length - 1];
+    if (last && last.created_at === row.created_at) return;
+    rows.value.push(row);
+  }
+
   /** Toggled by the "Expand All / Collapse All" button. MessageBubble
    * binds <details open> to this value. */
   const allToolDetailsOpen = ref(false);
@@ -79,6 +90,7 @@ export const useMessagesStore = defineStore('messages', () => {
     containerEl,
     load,
     clear,
+    appendRow,
     requestJump,
     clearJump,
   };

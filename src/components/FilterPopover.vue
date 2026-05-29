@@ -2,6 +2,26 @@
 import { computed, ref, watch } from 'vue';
 import { useSessionsStore } from '@/stores/sessions';
 import { FILTER_DATE_RANGE_MAX_DAYS, type SessionFilterParams } from '@/api/sessions';
+import MultiSelectDropdown from '@/components/MultiSelectDropdown.vue';
+import SingleSelectDropdown from '@/components/SingleSelectDropdown.vue';
+import DateTimeField from '@/components/DateTimeField.vue';
+
+const yesNoOptions = [
+  { value: '', label: 'All' },
+  { value: 'true', label: 'Yes' },
+  { value: 'false', label: 'No' },
+];
+const sortOptions = [
+  { value: 'newest', label: 'Newest first' },
+  { value: 'oldest', label: 'Oldest first' },
+  { value: 'most-msgs', label: 'Most messages' },
+  { value: 'least-msgs', label: 'Fewest messages' },
+];
+const reviewedOptions = [
+  { value: 'all', label: 'All sessions' },
+  { value: 'unreviewed', label: 'Unreviewed only' },
+  { value: 'reviewed', label: 'Reviewed only' },
+];
 
 const props = defineProps<{ open: boolean }>();
 const emit = defineEmits<{ (e: 'close'): void }>();
@@ -9,13 +29,20 @@ const emit = defineEmits<{ (e: 'close'): void }>();
 const sessions = useSessionsStore();
 
 // Local form state — committed to the store via Apply.
-// Each input is a string (datetime-local / number) so we don't fight v-model.
 const dateFrom = ref('');
 const dateTo = ref('');
 const msgMin = ref('');
 const msgMax = ref('');
 const sortBy = ref<'newest' | 'oldest' | 'most-msgs' | 'least-msgs'>('newest');
 const reviewedFilter = ref<'all' | 'unreviewed' | 'reviewed'>('all');
+const tools = ref<string[]>([]);
+const categories = ref<string[]>([]);
+const requestTypes = ref<string[]>([]);
+const projects = ref<string[]>([]);
+const visitorTypes = ref<string[]>([]);
+const languages = ref<string[]>([]);
+const verifiedFilter = ref<'' | 'true' | 'false'>('');
+const endConvFilter = ref<'' | 'true' | 'false'>('');
 const validation = ref(''); // '' | 'true' | 'false'
 const isWhatsapp = ref('');
 const hasLead = ref('');
@@ -59,6 +86,12 @@ const collected = computed<SessionFilterParams>(() => ({
   dateTo: isoOrUndefined(dateTo.value),
   msgMin: intOrUndefined(msgMin.value),
   msgMax: intOrUndefined(msgMax.value),
+  tools: tools.value.length ? tools.value : undefined,
+  categories: categories.value.length ? categories.value : undefined,
+  requestTypes: requestTypes.value.length ? requestTypes.value : undefined,
+  projects: projects.value.length ? projects.value : undefined,
+  visitorTypes: visitorTypes.value.length ? visitorTypes.value : undefined,
+  languages: languages.value.length ? languages.value : undefined,
   validation: boolOrUndefined(validation.value),
   isWhatsapp: boolOrUndefined(isWhatsapp.value),
   hasLead: boolOrUndefined(hasLead.value),
@@ -71,22 +104,28 @@ const hasAnyFilter = computed(() => {
   return !!(
     c.dateFrom || c.dateTo ||
     c.msgMin != null || c.msgMax != null ||
+    c.tools?.length || c.categories?.length || c.requestTypes?.length ||
+    c.projects?.length || c.visitorTypes?.length || c.languages?.length ||
     c.validation != null || c.isWhatsapp != null ||
     c.hasLead != null || c.hasCase != null || c.hasBooking != null
   );
 });
 
 // Apply is allowed when there's anything to apply (server filter OR a
-// sort/reviewed change). Date warning blocks regardless.
-const sortOrReviewedChanged = computed(
-  () => sortBy.value !== sessions.sortBy || reviewedFilter.value !== sessions.reviewedFilter,
+// client-side change). Date warning blocks regardless.
+const clientSideChanged = computed(
+  () =>
+    sortBy.value !== sessions.sortBy ||
+    reviewedFilter.value !== sessions.reviewedFilter ||
+    verifiedFilter.value !== sessions.verifiedFilter ||
+    endConvFilter.value !== sessions.endConvFilter,
 );
 const applyDisabled = computed(
-  () => (!hasAnyFilter.value && !sortOrReviewedChanged.value) || dateWarning.value !== null,
+  () => (!hasAnyFilter.value && !clientSideChanged.value) || dateWarning.value !== null,
 );
 
-// When the popover opens, hydrate the form from the currently applied
-// filters + the active sort/reviewed settings so users see what's active.
+// When the popover opens, hydrate the form from currently applied filters
+// + the active client-side settings so users see what's active.
 watch(
   () => props.open,
   (open) => {
@@ -96,8 +135,16 @@ watch(
     dateTo.value = f?.dateTo ? f.dateTo.slice(0, 16) : '';
     msgMin.value = f?.msgMin != null ? String(f.msgMin) : '';
     msgMax.value = f?.msgMax != null ? String(f.msgMax) : '';
+    tools.value = f?.tools ? [...f.tools] : [];
+    categories.value = f?.categories ? [...f.categories] : [];
+    requestTypes.value = f?.requestTypes ? [...f.requestTypes] : [];
+    projects.value = f?.projects ? [...f.projects] : [];
+    visitorTypes.value = f?.visitorTypes ? [...f.visitorTypes] : [];
+    languages.value = f?.languages ? [...f.languages] : [];
     sortBy.value = sessions.sortBy;
     reviewedFilter.value = sessions.reviewedFilter;
+    verifiedFilter.value = sessions.verifiedFilter;
+    endConvFilter.value = sessions.endConvFilter;
     validation.value = f?.validation == null ? '' : String(f.validation);
     isWhatsapp.value = f?.isWhatsapp == null ? '' : String(f.isWhatsapp);
     hasLead.value = f?.hasLead == null ? '' : String(f.hasLead);
@@ -112,15 +159,14 @@ async function onApply() {
   // immediately even before any RPC response.
   sessions.sortBy = sortBy.value;
   sessions.reviewedFilter = reviewedFilter.value;
+  sessions.verifiedFilter = verifiedFilter.value;
+  sessions.endConvFilter = endConvFilter.value;
   if (hasAnyFilter.value) {
-    // Server filters present → trigger RPC reload.
     await sessions.applyFilters(collected.value);
   } else if (sessions.filtersApplied) {
-    // Sort/reviewed-only Apply while server filters were active → drop them.
+    // Client-side-only Apply while server filters were active → drop them.
     await sessions.clearFilters();
   }
-  // Pure sort/reviewed change with no prior server filters → store update
-  // alone is enough; `visible` recomputes immediately.
   emit('close');
 }
 
@@ -129,8 +175,16 @@ async function onClear() {
   dateTo.value = '';
   msgMin.value = '';
   msgMax.value = '';
+  tools.value = [];
+  categories.value = [];
+  requestTypes.value = [];
+  projects.value = [];
+  visitorTypes.value = [];
+  languages.value = [];
   sortBy.value = 'newest';
   reviewedFilter.value = 'all';
+  verifiedFilter.value = '';
+  endConvFilter.value = '';
   validation.value = '';
   isWhatsapp.value = '';
   hasLead.value = '';
@@ -138,6 +192,8 @@ async function onClear() {
   hasBooking.value = '';
   sessions.sortBy = 'newest';
   sessions.reviewedFilter = 'all';
+  sessions.verifiedFilter = '';
+  sessions.endConvFilter = '';
   await sessions.clearFilters();
   emit('close');
 }
@@ -155,13 +211,13 @@ async function onClear() {
     <div class="filter-group">
       <span class="filter-group-label">Session</span>
       <div class="filter-group-fields">
-        <div class="filter-cell">
+        <div class="filter-cell filter-cell-date">
           <label>Date from</label>
-          <input v-model="dateFrom" type="datetime-local" />
+          <DateTimeField v-model="dateFrom" placeholder="yyyy-mm-dd hh:mm" />
         </div>
-        <div class="filter-cell">
+        <div class="filter-cell filter-cell-date">
           <label>Date to</label>
-          <input v-model="dateTo" type="datetime-local" />
+          <DateTimeField v-model="dateTo" placeholder="yyyy-mm-dd hh:mm" />
         </div>
         <div class="filter-cell">
           <label>Msg min</label>
@@ -173,20 +229,11 @@ async function onClear() {
         </div>
         <div class="filter-cell">
           <label>Sort by</label>
-          <select v-model="sortBy">
-            <option value="newest">Newest first</option>
-            <option value="oldest">Oldest first</option>
-            <option value="most-msgs">Most messages</option>
-            <option value="least-msgs">Fewest messages</option>
-          </select>
+          <SingleSelectDropdown v-model="sortBy" :options="sortOptions" />
         </div>
         <div class="filter-cell">
           <label>Reviewed</label>
-          <select v-model="reviewedFilter">
-            <option value="all">All sessions</option>
-            <option value="unreviewed">Unreviewed only</option>
-            <option value="reviewed">Reviewed only</option>
-          </select>
+          <SingleSelectDropdown v-model="reviewedFilter" :options="reviewedOptions" />
         </div>
       </div>
     </div>
@@ -197,27 +244,38 @@ async function onClear() {
       <div class="filter-group-fields">
         <div class="filter-cell">
           <label>Tools used</label>
-          <button class="dd-stub" disabled title="Multi-select dropdowns land in a follow-up M2 sub-milestone">All tools</button>
+          <MultiSelectDropdown
+            v-model="tools"
+            :options="sessions.filterOptions.tools"
+            default-label="All tools"
+            active-prefix="Tools"
+          />
         </div>
         <div class="filter-cell">
           <label>Category</label>
-          <button class="dd-stub" disabled title="Multi-select dropdowns land in a follow-up M2 sub-milestone">All categories</button>
+          <MultiSelectDropdown
+            v-model="categories"
+            :options="sessions.filterOptions.categories"
+            default-label="All categories"
+            active-prefix="Category"
+          />
         </div>
         <div class="filter-cell">
           <label>Request type</label>
-          <button class="dd-stub" disabled title="Multi-select dropdowns land in a follow-up M2 sub-milestone">All types</button>
+          <MultiSelectDropdown
+            v-model="requestTypes"
+            :options="sessions.filterOptions.request_types"
+            default-label="All types"
+            active-prefix="Type"
+          />
         </div>
         <div class="filter-cell">
           <label>Verified</label>
-          <select disabled title="Client-side filter — lands with the predicate sub-milestone">
-            <option value="">All</option>
-          </select>
+          <SingleSelectDropdown v-model="verifiedFilter" :options="yesNoOptions" />
         </div>
         <div class="filter-cell">
           <label>End conv.</label>
-          <select disabled title="Client-side filter — lands with the predicate sub-milestone">
-            <option value="">All</option>
-          </select>
+          <SingleSelectDropdown v-model="endConvFilter" :options="yesNoOptions" />
         </div>
       </div>
     </div>
@@ -228,31 +286,38 @@ async function onClear() {
       <div class="filter-group-fields">
         <div class="filter-cell">
           <label>Project</label>
-          <button class="dd-stub" disabled title="Multi-select dropdowns land in a follow-up M2 sub-milestone">All projects</button>
+          <MultiSelectDropdown
+            v-model="projects"
+            :options="sessions.filterOptions.projects"
+            default-label="All projects"
+            active-prefix="Project"
+          />
         </div>
         <div class="filter-cell">
           <label>Visitor type</label>
-          <button class="dd-stub" disabled title="Multi-select dropdowns land in a follow-up M2 sub-milestone">All visitor types</button>
+          <MultiSelectDropdown
+            v-model="visitorTypes"
+            :options="sessions.filterOptions.visitor_types"
+            default-label="All visitor types"
+            active-prefix="Visitor type"
+          />
         </div>
         <div class="filter-cell">
           <label>Language</label>
-          <button class="dd-stub" disabled title="Multi-select dropdowns land in a follow-up M2 sub-milestone">All languages</button>
+          <MultiSelectDropdown
+            v-model="languages"
+            :options="sessions.filterOptions.languages"
+            default-label="All languages"
+            active-prefix="Language"
+          />
         </div>
         <div class="filter-cell">
           <label>WhatsApp</label>
-          <select v-model="isWhatsapp">
-            <option value="">All</option>
-            <option value="true">Yes</option>
-            <option value="false">No</option>
-          </select>
+          <SingleSelectDropdown v-model="isWhatsapp" :options="yesNoOptions" />
         </div>
         <div class="filter-cell">
           <label>Validated</label>
-          <select v-model="validation">
-            <option value="">All</option>
-            <option value="true">Yes</option>
-            <option value="false">No</option>
-          </select>
+          <SingleSelectDropdown v-model="validation" :options="yesNoOptions" />
         </div>
       </div>
     </div>
@@ -263,27 +328,15 @@ async function onClear() {
       <div class="filter-group-fields">
         <div class="filter-cell">
           <label>Has lead</label>
-          <select v-model="hasLead">
-            <option value="">All</option>
-            <option value="true">Yes</option>
-            <option value="false">No</option>
-          </select>
+          <SingleSelectDropdown v-model="hasLead" :options="yesNoOptions" />
         </div>
         <div class="filter-cell">
           <label>Has case</label>
-          <select v-model="hasCase">
-            <option value="">All</option>
-            <option value="true">Yes</option>
-            <option value="false">No</option>
-          </select>
+          <SingleSelectDropdown v-model="hasCase" :options="yesNoOptions" />
         </div>
         <div class="filter-cell">
           <label>Has booking</label>
-          <select v-model="hasBooking">
-            <option value="">All</option>
-            <option value="true">Yes</option>
-            <option value="false">No</option>
-          </select>
+          <SingleSelectDropdown v-model="hasBooking" :options="yesNoOptions" />
         </div>
       </div>
     </div>
@@ -393,42 +446,40 @@ async function onClear() {
 .filter-cell input[type='number'] {
   padding: 6px 8px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: 4px;
   font-size: 12px;
   outline: none;
   background: #fff;
+  color: var(--text-primary);
   min-width: 0;
-}
-.filter-cell input[type='date'],
-.filter-cell input[type='datetime-local'] {
-  width: 180px;
 }
 .filter-cell input[type='number'] {
   width: 72px;
 }
+.filter-cell-date {
+  width: 190px;
+  min-width: 190px;
+}
+/* Match MultiSelectDropdown shape: native chevron replaced with the same
+ * SVG arrow so all six "boolean / multi" selectors render visually
+ * uniform across the popover. */
 .filter-cell select {
   min-width: 110px;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5' viewBox='0 0 8 5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%23556064'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  padding-right: 24px;
 }
 .filter-cell select:focus,
 .filter-cell input:focus {
   border-color: var(--accent);
 }
-.filter-cell select:disabled,
-.filter-cell .dd-stub {
+.filter-cell select:disabled {
   opacity: 0.6;
   cursor: not-allowed;
-}
-
-/* Multi-select stubs — visually a button-like field for parity. */
-.dd-stub {
-  padding: 6px 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  font-size: 12px;
-  background: #fff;
-  text-align: left;
-  min-width: 130px;
-  color: var(--text-secondary);
 }
 
 .filter-date-warning {

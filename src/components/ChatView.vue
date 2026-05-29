@@ -100,6 +100,7 @@ watch(
         v-for="(m, i) in messages.parsed"
         :key="`${messages.sessionId}-${i}`"
         :parsed="m"
+        :index="i"
       />
     </div>
   </div>
