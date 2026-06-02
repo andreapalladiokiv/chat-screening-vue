@@ -5,6 +5,7 @@ import { formatSessionMeta } from '@/utils/formatDate';
 import { buildTypePills } from '@/utils/typePills';
 import { hasEnrichment } from '@/utils/sessionEnrichment';
 import { useClipboard } from '@/composables/useClipboard';
+import { useSessionsStore } from '@/stores/sessions';
 
 const props = defineProps<{
   session: Session;
@@ -15,10 +16,12 @@ defineEmits<{
   (e: 'select', id: string): void;
 }>();
 
+const sessions = useSessionsStore();
 const displayId = computed(() => props.session.conversationId || props.session.id);
 const metaLine = computed(() => formatSessionMeta(props.session.count, props.session.latest));
 const pills = computed(() => buildTypePills(props.session.typeCounts));
 const hasVisitorEnrichment = computed(() => hasEnrichment(props.session));
+const isReviewed = computed(() => sessions.reviewedIds.has(props.session.id));
 
 const { justCopied, copy } = useClipboard();
 function copyId(e: Event) {
@@ -51,6 +54,7 @@ function copyId(e: Event) {
     </div>
 
     <div class="session-badges">
+      <span v-if="isReviewed" class="badge reviewed">reviewed</span>
       <span v-if="session.project" class="badge badge-project">{{ session.project }}</span>
       <span v-if="session.visitorType" class="badge badge-visitor-type">{{ session.visitorType }}</span>
       <span v-if="!hasVisitorEnrichment" class="badge badge-no-visitor">no visitor data</span>
@@ -170,6 +174,10 @@ function copyId(e: Event) {
 .badge.badge-visitor-type {
   background: var(--badge-visitor-bg);
   color: var(--badge-visitor-text);
+}
+.badge.reviewed {
+  background: var(--badge-reviewed-bg);
+  color: var(--badge-reviewed-text);
 }
 .badge.verified {
   background: var(--badge-verified-bg);

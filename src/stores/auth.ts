@@ -116,6 +116,14 @@ export const useAuthStore = defineStore('auth', () => {
       }
     }
 
+    // Strip any OAuth tokens left in the URL hash (#access_token=…&refresh_token=…
+    // &expires_in=…&token_type=bearer). Supabase v2 usually clears this itself,
+    // but the cleanup races with other early code and sometimes leaves the hash
+    // behind — we wipe it unconditionally once auth has resolved.
+    if (window.location.hash.includes('access_token')) {
+      history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
+
     initialising.value = false;
   }
 

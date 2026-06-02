@@ -42,9 +42,12 @@ export const useSessionsStore = defineStore('sessions', () => {
 
   /** id of the currently selected session, if any. */
   const currentId = ref<string | null>(null);
-  const current = computed<Session | null>(() =>
-    currentId.value ? list.value.find((s) => s.id === currentId.value) ?? null : null,
-  );
+  const current = computed<Session | null>(() => {
+    if (!currentId.value) return null;
+    const fromList = list.value.find((s) => s.id === currentId.value);
+    if (fromList) return fromList;
+    return searchResults.value?.find((s) => s.id === currentId.value) ?? null;
+  });
 
   /** Search state. searchResults === null means "no search active". */
   const searchQuery = ref('');
@@ -262,19 +265,13 @@ export const useSessionsStore = defineStore('sessions', () => {
       };
       list.value.unshift(session);
       // Lazy-load visitor enrichment so badges populate without blocking.
+      // Re-find via the reactive list so writes go through Vue's proxy —
+      // assigning to the raw `session` reference would bypass it.
       apiFetchEnrichment(sid).then((vs) => {
-        if (!vs || !session) return;
-        session.project = vs.project;
-        session.visitorType = vs.visitorType;
-        session.language = vs.language;
-        session.validation = vs.validation;
-        session.isWhatsapp = vs.isWhatsapp;
-        session.hasLead = vs.hasLead;
-        session.hasCase = vs.hasCase;
-        session.hasBooking = vs.hasBooking;
-        session.requestId = vs.requestId;
-        session.maskedClientPhone = vs.maskedClientPhone;
-        session.conversationId = vs.conversationId;
+        if (!vs) return;
+        const proxied = list.value.find((s) => s.id === sid);
+        if (!proxied) return;
+        Object.assign(proxied, vs);
       });
     }
 
@@ -364,22 +361,23 @@ export const useSessionsStore = defineStore('sessions', () => {
       try {
         // Tier 1: exact match on chat_messages.session_id, falling back to
         // visitors_settings.conversation_id. Index-backed, instant — works
-        // for sessions of any age. Lazily fetch visitor enrichment so
-        // badges populate without blocking.
+        // for sessions of any age. Fetch visitor enrichment in parallel so
+        // the single result lands with all badges already populated (no
+        // post-render flicker as enrichment trickles in).
         const exact = await apiExactLookup(trimmed);
         if (myEpoch !== searchEpoch) return;
         if (exact) {
+          const vs = await apiFetchEnrichment(exact.id).catch(() => null);
+          if (myEpoch !== searchEpoch) return;
+          if (vs) Object.assign(exact, vs);
           searchResults.value = [exact];
           searchError.value = null;
-          apiFetchEnrichment(exact.id).then((vs) => {
-            if (!vs) return;
-            if (myEpoch !== searchEpoch) return;
-            Object.assign(exact, vs);
-          });
           return;
         }
 
-        // Tier 2: RPC ILIKE substring search across the 3-day window.
+        // Tier 2: RPC ILIKE substring search across the 3-day window. The
+        // RPC already LEFT JOINs visitors_settings so each row arrives
+        // fully enriched — no extra fetch needed.
         const results = await apiSearch(trimmed);
         if (myEpoch !== searchEpoch) return;
         searchResults.value = results;
@@ -407,12 +405,17 @@ export const useSessionsStore = defineStore('sessions', () => {
   /**
    * Initial load — last 3 days, up to 50 most recent. Retries up to
    * MAX_RETRIES on transient failure (matches legacy resilience).
+   *
+   * Clears only the list/page state — search query, current selection, and
+   * reviewed-set are preserved so a URL-driven `?q=…&session=…` deep link
+   * survives the first-mount load.
    */
   async function loadDefault(): Promise<void> {
     loading.value = true;
     error.value = null;
-    reset();
-    loading.value = true; // reset() flips loading off; re-set
+    list.value = [];
+    cursor.value = null;
+    noMore.value = false;
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {

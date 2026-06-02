@@ -28,29 +28,50 @@ onBeforeUnmount(() => sessions.unsubscribeRealtime());
 // at the top level (its overlay needs to cover everything below TopNav).
 const filterOpen = ref(false);
 
-// ── Deep link: ?session=<id> ────────────────────────────────────────────
-// Two-way binding between sessions.currentId and the URL's `session` query.
+// ── Deep link: ?session=<id> & ?q=<search> ──────────────────────────────
+// Two-way binding between the store and the URL so reloads / shareable
+// links restore both the search context and the selected session.
 //
-// 1. URL → store: whenever the query changes (page mount, back/fwd nav,
-//    user pastes a URL), find the session in the loaded list and select it.
-//    Re-runs as the list itself populates because we watch both sources.
-// 2. Store → URL: when the user clicks a session, write its id to the
-//    query so the URL is shareable. router.replace (not push) avoids
-//    polluting browser history with selection changes.
-//
-// TODO (later M2): fetch-by-id when the session isn't in the loaded list
-// (older than 3 days). For now we simply leave currentId null in that case.
+// 1. URL → store: on mount / nav / paste, re-issue the search and look up
+//    the session in either the default list or the search results.
+// 2. Store → URL: when the user types in search or picks a session, mirror
+//    the change back to the query string. router.replace (not push) avoids
+//    polluting browser history with every keystroke.
 
 watch(
-  () => [route.query.session, sessions.list] as const,
-  ([querySession, list]) => {
+  () => route.query.q,
+  (q) => {
+    const next = typeof q === 'string' ? q : '';
+    if (sessions.searchQuery === next) return;
+    if (next) sessions.setSearchQuery(next);
+    else sessions.clearSearch();
+  },
+  { immediate: true },
+);
+
+watch(
+  () => sessions.searchQuery,
+  (q) => {
+    const cur = typeof route.query.q === 'string' ? route.query.q : '';
+    if (q === cur) return;
+    const next = { ...route.query };
+    if (q) next.q = q;
+    else delete next.q;
+    router.replace({ query: next });
+  },
+);
+
+watch(
+  () => [route.query.session, sessions.list, sessions.searchResults] as const,
+  ([querySession, list, searchResults]) => {
     const id = typeof querySession === 'string' ? querySession : null;
     if (!id) {
       if (sessions.currentId) sessions.select(null);
       return;
     }
     if (sessions.currentId === id) return;
-    const found = list.find((s) => s.id === id);
+    const found =
+      list.find((s) => s.id === id) ?? searchResults?.find((s) => s.id === id) ?? null;
     if (found) sessions.select(id);
   },
   { immediate: true },
