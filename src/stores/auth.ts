@@ -149,7 +149,7 @@ export const useAuthStore = defineStore('auth', () => {
       options: {
         // Always land on the app root after OAuth — keeps the access_token
         // hash off /login URLs in browser history.
-        redirectTo: window.location.origin + '/',
+        redirectTo: window.location.origin + import.meta.env.BASE_URL,
       },
     });
     if (err) error.value = `Failed to start Google sign-in: ${err.message}`;
@@ -186,7 +186,7 @@ export const useAuthStore = defineStore('auth', () => {
     const db = createSupabaseClient(target);
     const { error: err } = await db.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: window.location.origin + '/' },
+      options: { redirectTo: window.location.origin + import.meta.env.BASE_URL },
     });
     if (err) error.value = `Failed to switch environment: ${err.message}`;
   }
