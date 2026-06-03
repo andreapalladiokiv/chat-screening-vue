@@ -5,7 +5,17 @@ let client: SupabaseClient | null = null;
 
 export function createSupabaseClient(env: Environment): SupabaseClient {
   const url = `https://${env.projectId}.supabase.co`;
-  client = createClient(url, env.anonKey);
+  // PKCE flow returns ?code=... in query (no #access_token hash), and Supabase
+  // auto-exchanges it for a session + strips the param from the URL — keeps
+  // the access token out of browser history / referer headers entirely.
+  client = createClient(url, env.anonKey, {
+    auth: {
+      flowType: 'pkce',
+      detectSessionInUrl: true,
+      autoRefreshToken: true,
+      persistSession: true,
+    },
+  });
   return client;
 }
 
