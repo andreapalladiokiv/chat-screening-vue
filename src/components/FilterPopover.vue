@@ -111,8 +111,44 @@ const hasAnyFilter = computed(() => {
   );
 });
 
-// Apply is allowed when there's anything to apply (server filter OR a
-// client-side change). Date warning blocks regardless.
+function sameArr(a?: string[], b?: string[]): boolean {
+  const aa = a ?? [];
+  const bb = b ?? [];
+  if (aa.length !== bb.length) return false;
+  const s = new Set(aa);
+  for (const v of bb) if (!s.has(v)) return false;
+  return true;
+}
+
+function sameServerFilters(a: SessionFilterParams, b: SessionFilterParams | null): boolean {
+  const x = a;
+  const y = b ?? {};
+  return (
+    (x.dateFrom ?? null) === (y.dateFrom ?? null) &&
+    (x.dateTo ?? null) === (y.dateTo ?? null) &&
+    (x.msgMin ?? null) === (y.msgMin ?? null) &&
+    (x.msgMax ?? null) === (y.msgMax ?? null) &&
+    sameArr(x.tools, y.tools) &&
+    sameArr(x.categories, y.categories) &&
+    sameArr(x.requestTypes, y.requestTypes) &&
+    sameArr(x.projects, y.projects) &&
+    sameArr(x.visitorTypes, y.visitorTypes) &&
+    sameArr(x.languages, y.languages) &&
+    (x.validation ?? null) === (y.validation ?? null) &&
+    (x.isWhatsapp ?? null) === (y.isWhatsapp ?? null) &&
+    (x.hasLead ?? null) === (y.hasLead ?? null) &&
+    (x.hasCase ?? null) === (y.hasCase ?? null) &&
+    (x.hasBooking ?? null) === (y.hasBooking ?? null)
+  );
+}
+
+// Apply is allowed when the draft differs from what's currently in effect —
+// either the server filters changed, or a client-side knob moved. Without
+// this, manually clearing all fields after a previous Apply leaves the
+// button disabled even though there's a real change to commit.
+const serverFiltersChanged = computed(
+  () => !sameServerFilters(collected.value, sessions.appliedFilters),
+);
 const clientSideChanged = computed(
   () =>
     sortBy.value !== sessions.sortBy ||
@@ -121,7 +157,7 @@ const clientSideChanged = computed(
     endConvFilter.value !== sessions.endConvFilter,
 );
 const applyDisabled = computed(
-  () => (!hasAnyFilter.value && !clientSideChanged.value) || dateWarning.value !== null,
+  () => (!serverFiltersChanged.value && !clientSideChanged.value) || dateWarning.value !== null,
 );
 
 // When the popover opens, hydrate the form from currently applied filters

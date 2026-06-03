@@ -6,7 +6,6 @@ import type { Session, SessionRpcRow } from '@/types/session';
 const DEFAULT_LIMIT = 50;
 const PAGE_LIMIT = 10;
 const RPC_TIMEOUT_MS = 15_000;
-const DEFAULT_WINDOW_DAYS = 3;
 export const FILTER_DATE_RANGE_MAX_DAYS = 7;
 
 export interface SessionFilterParams {
@@ -98,19 +97,15 @@ async function callRpc(params: RpcParams): Promise<Session[]> {
 }
 
 /**
- * Initial load — last 3 days, capped at 50 sessions. Caller decides whether
- * to retry on failure (the sessions store does). The 3-day default mirrors
- * legacy behaviour: scopes the Stage-1 GROUP BY scan to avoid full-table cost.
+ * Initial load — 50 most recent sessions, no date window.
+ *
+ * The RPC's loose index scan walks the (created_at DESC) index backwards
+ * collecting distinct session_ids until p_limit, so cost is O(p_limit)
+ * regardless of history size. No client-side window required — passing
+ * dateFrom here would force the GROUP BY fallback path on the server.
  */
 export async function loadDefaultSessions(): Promise<Session[]> {
-  const now = new Date();
-  const since = new Date(now.getTime() - DEFAULT_WINDOW_DAYS * 24 * 60 * 60 * 1000);
-  return callRpc(
-    toRpcParams(DEFAULT_LIMIT, {
-      dateFrom: since.toISOString(),
-      dateTo: now.toISOString(),
-    }),
-  );
+  return callRpc(toRpcParams(DEFAULT_LIMIT));
 }
 
 /**

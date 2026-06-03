@@ -5,6 +5,7 @@ config.js
 node_modules/
 dist/
 dist-ssr/
+.vite/
 *.local
 .env.local
 .env.*.local

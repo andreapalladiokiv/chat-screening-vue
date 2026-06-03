@@ -441,12 +441,19 @@ export const useSessionsStore = defineStore('sessions', () => {
 
   /**
    * Infinite-scroll page. No-op if already loading, no more, or no cursor.
+   *
+   * No date window is passed for the unfiltered case — the RPC's loose
+   * index scan handles cursor pagination in O(p_limit) regardless of
+   * history depth. When filters are active their own dateFrom/dateTo
+   * survives the round-trip so the page stays consistent with the visible
+   * set.
    */
   async function loadMore(): Promise<void> {
     if (loadingMore.value || noMore.value || !cursor.value) return;
     loadingMore.value = true;
     try {
-      const sessions = await apiLoadMore(cursor.value);
+      const filters: SessionFilterParams = appliedFilters.value ?? {};
+      const sessions = await apiLoadMore(cursor.value, filters);
       if (sessions.length === 0) {
         noMore.value = true;
       } else {
