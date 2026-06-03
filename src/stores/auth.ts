@@ -211,5 +211,6 @@ export const useAuthStore = defineStore('auth', () => {
     init,
     signInWithGoogle,
     signOut,
+    switchEnv,
   };
 });

@@ -149,7 +149,7 @@ export function parseMessage(row: ChatMessageRow): ParsedMessage {
       } catch {
         return {
           type: 'system',
-          text: content,
+          text: content as string,
           systemParsed: null,
           timestamp,
           raw,

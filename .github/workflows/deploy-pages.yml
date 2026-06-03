@@ -31,6 +31,7 @@ jobs:
       # import.meta.env). Set each value as a repo secret.
       - run: npm run build
         env:
+          BASE_URL: /chat-screening-vue/
           VITE_ENV_NAMES: ${{ secrets.VITE_ENV_NAMES }}
           VITE_ENV_PROJECT_IDS: ${{ secrets.VITE_ENV_PROJECT_IDS }}
           VITE_ENV_ANON_KEYS: ${{ secrets.VITE_ENV_ANON_KEYS }}

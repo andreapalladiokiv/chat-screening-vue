@@ -3,10 +3,12 @@ import vue from '@vitejs/plugin-vue';
 import { fileURLToPath, URL } from 'node:url';
 
 // https://vitejs.dev/config/
-export default defineConfig(({ mode }) => ({
-  // GitHub Pages serves the site under /<repo-name>/. Vite injects this as
-  // import.meta.env.BASE_URL, which router and OAuth redirect consume.
-  base: mode === 'production' ? '/chat-screening-vue/' : '/',
+export default defineConfig(() => ({
+  // Read base path from env so the repo name isn't hardcoded in the config.
+  // The deploy workflow sets BASE_URL=/chat-screening-vue/; in dev it's
+  // unset → '/'. Vite re-exports this as import.meta.env.BASE_URL, which
+  // the router and OAuth redirect both consume.
+  base: process.env.BASE_URL ?? '/',
   plugins: [vue()],
   resolve: {
     alias: {
